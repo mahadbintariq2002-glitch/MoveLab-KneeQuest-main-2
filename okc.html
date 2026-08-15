@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0e24" />
+<meta name="apple-mobile-web-app-capable" content="yes" /><meta name="mobile-web-app-capable" content="yes" />
+<title>OKC Rehab Games — MoveLab</title>
+<style>
+  :root{ --bg:#0a0e24; --panel:rgba(18,22,54,.9); --line:#2c3670; --txt:#eef2ff; --muted:#9aa6d4;
+    --cyan:#37e1ff; --amber:#ffb84d; --green:#8affc0; --pink:#ff6fae; --gold:#ffe08a; --r:18px; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden;overscroll-behavior:none}
+  #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;z-index:0}
+  .screen{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;overflow:auto;
+    background:linear-gradient(135deg,#141a44,#25184f 55%,#3f1f56)}
+  .screen.on{display:flex;animation:fade .35s ease}
+  .screen::before{content:"";position:fixed;inset:-20%;z-index:-1;background:
+    radial-gradient(circle at 20% 20%,#37e1ff22,transparent 40%),radial-gradient(circle at 80% 30%,#ff6fae22,transparent 40%),radial-gradient(circle at 50% 90%,#8affc022,transparent 45%);animation:drift 15s ease-in-out infinite alternate}
+  @keyframes drift{to{transform:translate(-4%,-3%) scale(1.08)}}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+  @keyframes pop{0%{transform:scale(0) rotate(-30deg);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
+  @keyframes floaty{to{transform:translateY(-10px)}}
+  h1{margin:0;font-size:clamp(26px,7vw,44px);font-weight:900;letter-spacing:.5px;background:linear-gradient(90deg,var(--gold),var(--cyan),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 18px #37e1ff55)}
+  h2{margin:0;font-size:clamp(19px,5vw,28px);font-weight:800}
+  p.sub{color:var(--muted);font-size:15.5px;max-width:480px;line-height:1.5;margin:0}
+  .hero{font-size:66px;animation:floaty 2.6s ease-in-out infinite alternate;filter:drop-shadow(0 0 22px #37e1ff88)}
+  .btn{border:none;border-radius:var(--r);padding:16px 30px;font-size:19px;font-weight:800;cursor:pointer;color:#04122a;background:linear-gradient(180deg,#8becff,#37e1ff);box-shadow:0 8px 22px #37e1ff44,inset 0 -3px 0 #0af3;display:inline-flex;gap:10px;align-items:center;justify-content:center;min-width:170px;min-height:58px;transition:transform .1s}
+  .btn:active{transform:translateY(2px) scale(.98)} .btn.big{font-size:22px;padding:20px 40px}
+  .btn.gold{background:linear-gradient(180deg,#ffe9a8,#ffc24d);box-shadow:0 8px 22px #ffb84d55,inset 0 -3px 0 #a705}
+  .btn.ghost{background:rgba(255,255,255,.08);color:var(--txt);box-shadow:none;border:1px solid var(--line);font-weight:700;min-width:120px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:center}
+  .topchips{position:fixed;top:0;left:0;right:0;z-index:12;display:flex;gap:8px;justify-content:center;padding:max(10px,env(safe-area-inset-top)) 10px 8px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:15px;font-weight:800;backdrop-filter:blur(6px)}
+  .grid{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;max-width:640px}
+  .pick{background:var(--panel);border:2px solid var(--line);border-radius:var(--r);padding:16px;cursor:pointer;color:var(--txt);width:160px;text-align:center;transition:transform .12s,border-color .2s;animation:pop .4s backwards;position:relative}
+  .pick:hover{transform:translateY(-3px)} .pick.sel{border-color:var(--gold);box-shadow:0 0 0 3px #ffe08a44,0 10px 24px #0006}
+  .pick .emoji{font-size:46px;line-height:1} .pick .pn{font-size:16px;font-weight:800;margin-top:6px} .pick .pd{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.35}
+  .pick .stars{color:var(--gold);font-size:15px;margin-top:6px} .pick.locked{opacity:.5} .pick .soon{margin-top:6px;font-size:11px;font-weight:800;color:var(--amber)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;max-width:480px;width:100%}
+  /* HUD */
+  #hud{position:fixed;inset:0;z-index:8;display:none;pointer-events:none} #hud.on{display:block}
+  #hudTop{position:absolute;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;padding:max(10px,env(safe-area-inset-top)) 12px 8px}
+  #gTitle{font-size:15px;font-weight:800;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:6px 12px}
+  .bar{flex:1;height:16px;border-radius:9px;background:#ffffff1c;overflow:hidden;border:1px solid var(--line)} .bar>i{display:block;height:100%;border-radius:9px;transition:width .1s;background:linear-gradient(90deg,#ffe08a,#8affc0)}
+  #hudR{font-size:15px;font-weight:800;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:6px 12px}
+  #btnPause{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;pointer-events:auto;min-width:56px}
+  #fbBanner{position:absolute;left:50%;bottom:11%;transform:translateX(-50%);font-size:24px;font-weight:900;background:#000c;border:2px solid var(--line);border-radius:24px;padding:12px 24px;opacity:0;transition:opacity .2s;text-align:center;max-width:94vw;text-shadow:0 2px 6px #000}
+  #video{position:fixed;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;left:0;top:0}  /* hidden capture source; drawn to canvas */
+  #pipWrap{position:fixed;right:8px;bottom:8px;width:132px;height:99px;z-index:9;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#000;display:none}
+  #pip{position:absolute;inset:0;width:100%;height:100%}
+  /* full-screen camera preview during "Get ready" — canvas (#stage) shows the live camera behind transparent controls */
+  .screen.preview{background:transparent;justify-content:flex-end;padding-bottom:26px}
+  .screen.preview::before{display:none}
+  .screen.preview h2{position:fixed;top:max(12px,env(safe-area-inset-top));left:0;right:0;text-shadow:0 2px 10px #000}
+  .screen.preview .card{background:rgba(10,14,36,.72);backdrop-filter:blur(6px)}
+  #framehint{position:fixed;top:64px;left:0;right:0;text-align:center;font-size:15px;font-weight:800;color:var(--gold);text-shadow:0 2px 8px #000;pointer-events:none;display:none}
+  #pipAngle{position:absolute;left:6px;bottom:4px;font-size:12px;font-weight:800;color:var(--gold);text-shadow:0 1px 3px #000}
+  #countbig{position:fixed;inset:0;z-index:11;display:none;align-items:center;justify-content:center;font-size:130px;font-weight:900;color:var(--gold);text-shadow:0 0 40px #ffe08a;pointer-events:none}
+  .bigstar{font-size:52px;color:#3a3f66;display:inline-block;margin:0 4px} .bigstar.lit{color:var(--gold);text-shadow:0 0 18px #ffe08a;animation:pop .5s backwards}
+  .crow{display:flex;justify-content:space-between;padding:7px 4px;border-bottom:1px solid #ffffff14;font-size:15px} .crow b{font-weight:800} .crow.xp b{color:var(--cyan)} .crow.coin b{color:var(--gold)}
+  #sumAch{color:var(--gold);font-weight:800;min-height:20px}
+  .tiles{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:480px} .tile{flex:1;min-width:92px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center} .tile .tv{font-size:22px;font-weight:900;color:var(--cyan)} .tile .tl{font-size:11px;color:var(--muted)}
+  #dChart{width:100%;height:120px;display:block;margin-top:8px}
+  .toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%);z-index:40;background:#000d;border:1px solid var(--line);border-radius:20px;padding:10px 18px;font-size:14px;opacity:0;transition:opacity .3s;text-align:center;max-width:90vw}
+  .spinner{width:36px;height:36px;border:3px solid #ffffff20;border-top-color:var(--cyan);border-radius:50%;animation:spin 1s linear infinite;display:none} @keyframes spin{to{transform:rotate(360deg)}}
+  a.link{color:var(--muted);text-decoration:none;font-size:13px}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<video id="video" playsinline autoplay muted></video>
+<div id="pipWrap"><canvas id="pip"></canvas><div id="pipAngle">—</div></div>
+<div id="framehint">Get your whole body side-on in the frame (head to feet)</div>
+
+<!-- HUB -->
+<section class="screen" id="hub">
+  <div class="topchips"><span class="chip" id="coinN">0</span><span class="chip" id="rankN">Lv 1</span><span class="chip" id="streakN">🔥 0</span><span class="chip" id="btnMute" style="cursor:pointer">🔊</span></div>
+  <div class="hero">🦵</div>
+  <h1>OKC REHAB GAMES</h1>
+  <p class="sub">Open Kinetic Chain knee exercises — as games. Your knee movement is the controller.</p>
+  <div class="grid" id="gameGrid"></div>
+  <div class="row"><button class="btn ghost" id="btnDash">📊 Progress</button></div>
+  <div class="row"><a class="link" href="index.html">📈 Tracker</a><a class="link" href="arcade.html">🔮 Crystal Guardian</a></div>
+</section>
+
+<!-- DIFFICULTY -->
+<section class="screen" id="diffScreen">
+  <h2 id="diffTitle">Game</h2>
+  <p class="sub" id="diffHow"></p>
+  <div class="grid" id="diffGrid"></div>
+  <h2 style="font-size:19px;margin-top:6px">Hold time (seconds)</h2>
+  <div class="grid" id="holdRow"></div>
+  <div class="row"><button class="btn big gold" id="btnDiffNext">Start ▶</button><button class="btn ghost" id="btnDiffBack">← Back</button></div>
+</section>
+
+<!-- CALIBRATE -->
+<section class="screen" id="calibScreen">
+  <h2>Get ready</h2>
+  <div class="row" id="calCamRow"><button class="btn big gold" id="calCam">📷 Play with camera</button><button class="btn" id="calMouse">🖱 Preview with mouse</button></div>
+  <div class="spinner" id="spin"></div>
+  <p class="sub" id="calHint"></p>
+  <div id="calBody" style="display:none;width:100%;max-width:480px">
+    <div class="card" style="text-align:center"><div style="color:var(--muted);font-size:13px">YOUR KNEE (from straight)</div>
+      <div id="calNow" style="font-size:44px;font-weight:900;color:var(--cyan)">—</div>
+      <div id="calZone" style="font-size:15px;font-weight:800;min-height:22px">Sit side-on, whole leg visible</div></div>
+    <p class="sub" id="calSteps2">1) Straighten your leg → tap <b>Set 0°</b>. &nbsp; 2) <b>Start</b>.</p>
+    <div class="row"><button class="btn ghost" id="calSet">🎯 Set 0°</button><button class="btn big gold" id="calGo">▶ Start</button></div>
+  </div>
+</section>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="hudTop"><span id="gTitle">Game</span><div class="bar"><i id="progBar" style="width:0"></i></div><span id="hudR">★ <span id="scoreN">0</span> · <span id="repsN">0/0</span></span></div>
+  <button class="btn ghost" id="btnPause">⏸</button>
+  <div id="fbBanner"></div>
+</div>
+<div id="countbig"></div>
+
+<!-- SUMMARY -->
+<section class="screen" id="sumScreen">
+  <h1 id="sumTitle" style="font-size:32px">Exercise Complete!</h1>
+  <div id="sumStars"></div>
+  <div class="card"><div id="sumStats"></div></div>
+  <div id="sumAch"></div>
+  <div class="row"><button class="btn" id="btnReplay">↻ Again</button><button class="btn gold" id="btnSumHome">🏠 Menu</button></div>
+</section>
+
+<!-- DASHBOARD -->
+<section class="screen" id="dashScreen">
+  <h2>📊 Progress</h2>
+  <div class="tiles" id="dTiles"></div>
+  <div class="card"><div id="dGames"></div><canvas id="dChart"></canvas></div>
+  <button class="btn gold" id="btnDashBack">← Menu</button>
+</section>
+
+<div class="toast" id="toast"></div>
+<script>
+if("serviceWorker" in navigator){
+  let refreshing=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{ if(refreshing)return; refreshing=true; location.reload(); });
+  window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+}
+</script>
+<script type="module" src="js/okc/shell.js"></script>
+</body>
+</html>

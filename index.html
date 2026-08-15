@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0a14" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="manifest" href="manifest.json" />
+<title>MoveLab — Knee ROM</title>
+<style>
+  :root{
+    --bg:#0b0a14; --panel:rgba(18,14,32,.86); --line:#2a2440;
+    --txt:#eef0ff; --muted:#9aa0c0; --cyan:#00dcff; --green:#39ff14;
+    --lime:#00ff80; --orange:#ffa500; --red:#ff3250; --purple:#dc32c8;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden;overscroll-behavior:none}
+  #stage{position:fixed;inset:0;background:#000}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #overlay{position:absolute;inset:0;width:100%;height:100%}
+
+  #topbar{position:fixed;top:0;left:0;right:0;display:flex;gap:6px;flex-wrap:wrap;
+    padding:max(8px,env(safe-area-inset-top)) 10px 8px;align-items:center;
+    background:linear-gradient(#000a,transparent);z-index:5;font-size:12px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    padding:5px 10px;display:flex;gap:6px;align-items:center;backdrop-filter:blur(6px)}
+  .dot{width:8px;height:8px;border-radius:50%}
+  #recDot{background:var(--red);animation:blink 1s infinite;display:none}
+  @keyframes blink{50%{opacity:.2}}
+
+  /* Knee panel */
+  #knee{position:fixed;top:52px;right:8px;width:196px;z-index:4;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:10px;backdrop-filter:blur(8px)}
+  #knee h3{margin:0 0 8px;font-size:12px;color:var(--cyan);letter-spacing:.6px}
+  .kside{margin-bottom:9px;padding-bottom:8px;border-bottom:1px solid #ffffff12}
+  .kside:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+  .kname{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
+  .kbig{font-size:30px;font-weight:800;line-height:1.05;margin:1px 0}
+  .kbig small{font-size:13px;font-weight:600;color:var(--muted)}
+  .kmeta{font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+  .kstate{font-size:10px;font-weight:700;letter-spacing:.4px}
+
+  #controls{position:fixed;left:0;right:0;bottom:0;z-index:6;
+    padding:10px 10px max(10px,env(safe-area-inset-bottom));
+    display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
+    background:linear-gradient(transparent,#000c)}
+  button{background:var(--panel);color:var(--txt);border:1px solid var(--line);
+    border-radius:14px;padding:11px 14px;font-size:13px;font-weight:600;
+    display:flex;gap:6px;align-items:center;min-width:62px;justify-content:center}
+  button:active{transform:scale(.95)}
+  button.primary{background:var(--cyan);color:#001018;border-color:transparent}
+  button.rec{background:var(--red);color:#fff;border-color:transparent}
+  button:disabled{opacity:.4}
+
+  #splash{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:24px;gap:14px;
+    background:radial-gradient(circle at 50% 30%,#1a1432,#070611)}
+  #splash h1{margin:0;font-size:27px;background:linear-gradient(90deg,var(--cyan),var(--purple));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  #splash .tag{color:var(--txt);font-size:15px;font-weight:600;margin:-6px 0 0}
+  #splash p{color:var(--muted);max-width:350px;line-height:1.5;font-size:14px;margin:0}
+  #splash .big{font-size:16px;padding:16px 26px}
+  #loadmsg{color:var(--cyan);font-size:13px;min-height:18px;max-width:340px}
+  .spinner{width:34px;height:34px;border:3px solid #ffffff20;border-top-color:var(--cyan);
+    border-radius:50%;animation:spin 1s linear infinite;display:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  #report{position:fixed;inset:0;z-index:30;background:#070611;display:none;
+    flex-direction:column;padding:max(14px,env(safe-area-inset-top)) 14px 14px}
+  #report header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  #report h2{margin:0;font-size:18px}
+  #reportBody{overflow:auto;flex:1}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:12px}
+  .card h4{margin:0 0 4px;font-size:14px;color:var(--cyan)}
+  .card .sub{color:var(--muted);font-size:11px;margin-bottom:8px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  td,th{text-align:left;padding:4px 6px;border-bottom:1px solid #ffffff12}
+  th{color:var(--muted);font-weight:600}
+  canvas.chart{width:100%;height:140px;display:block}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:40;
+    background:#000d;border:1px solid var(--line);border-radius:20px;padding:8px 16px;
+    font-size:13px;opacity:0;transition:opacity .3s;text-align:center;max-width:90vw}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <video id="video" playsinline autoplay muted></video>
+  <canvas id="overlay"></canvas>
+</div>
+
+<div id="topbar">
+  <div class="chip"><span class="dot" id="poseDot" style="background:var(--red)"></span><span id="poseTxt">No pose</span></div>
+  <div class="chip"><span id="viewTxt">View: —</span></div>
+  <div class="chip"><span id="fpsTxt">— fps</span></div>
+  <div class="chip"><span id="diagTxt">—</span></div>
+  <div class="chip"><span class="dot" id="recDot"></span><span id="recTxt" style="display:none">REC</span></div>
+</div>
+
+<div id="knee">
+  <h3>KNEE FLEXION</h3>
+  <div class="kside" id="kL">
+    <div class="kname"><span>LEFT knee</span><span class="kstate" id="kLstate"></span></div>
+    <div class="kbig" id="kLval">—<small>°</small></div>
+    <div class="kmeta"><span id="kLrom">ROM —</span><span id="kLrep">reps 0</span></div>
+  </div>
+  <div class="kside" id="kR">
+    <div class="kname"><span>RIGHT knee</span><span class="kstate" id="kRstate"></span></div>
+    <div class="kbig" id="kRval">—<small>°</small></div>
+    <div class="kmeta"><span id="kRrom">ROM —</span><span id="kRrep">reps 0</span></div>
+  </div>
+</div>
+
+<div id="controls">
+  <button id="btnFlip">🔄 Flip</button>
+  <button id="btnCal" class="primary">🎯 Cal 0°</button>
+  <button id="btnLabels" class="primary">🏷 Labels</button>
+  <button id="btnRec" class="rec">⏺ Record</button>
+  <button id="btnReport" disabled>📊 Report</button>
+  <button id="btnReset">↺ Reset</button>
+</div>
+
+<div id="splash">
+  <h1>MoveLab</h1>
+  <div class="tag">Knee Range-of-Motion Tracker</div>
+  <p>Measures knee flexion angle live from your phone camera, for physio rehab.
+     Best used from a <b>side view</b> with your whole body in frame.</p>
+  <button id="btnStart" class="primary big">▶ Start</button>
+  <div class="spinner" id="spin"></div>
+  <div id="loadmsg"></div>
+  <p style="font-size:12px">Stand 2–3 m back, side-on to the camera, good lighting.</p>
+</div>
+
+<div id="report">
+  <header>
+    <h2>Knee ROM Report</h2>
+    <div style="display:flex;gap:8px">
+      <button id="btnCsv">⬇ CSV</button>
+      <button id="btnJson">⬇ JSON</button>
+      <button id="btnClose">✕</button>
+    </div>
+  </header>
+  <div id="reportBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { FilesetResolver, PoseLandmarker }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
+
+// ───────────────────────── Config ─────────────────────────
+const CONNECTIONS = PoseLandmarker.POSE_CONNECTIONS;
+const POSE_MODEL  = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+const WASM        = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/wasm";
+
+const LABELS = {0:"Nose",11:"L.Shoulder",12:"R.Shoulder",13:"L.Elbow",14:"R.Elbow",
+  15:"L.Wrist",16:"R.Wrist",23:"L.Hip",24:"R.Hip",25:"L.Knee",26:"R.Knee",
+  27:"L.Ankle",28:"R.Ankle",31:"L.Foot",32:"R.Foot"};
+
+// Knee angle = angle at KNEE between HIP and ANKLE.  raw 180 = straight leg.
+const KNEES = {
+  L:{hip:23,knee:25,ankle:27,color:"#39ff14",label:"L.Knee"},
+  R:{hip:24,knee:26,ankle:28,color:"#00ff80",label:"R.Knee"},
+};
+const P = {L_SH:11,R_SH:12,L_HIP:23,R_HIP:24};
+const LEFT_IDX  = [1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31];
+const RIGHT_IDX = [4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32];
+
+const VIS_DRAW=0.5, VIS_LABEL=0.6, VIS_HI=0.75, VIS_KNEE=0.55;
+const DEADBAND=1.5;                 // steady on-screen number
+const REP_BENT=70, REP_STRAIGHT=25; // rep state-machine thresholds (flexion deg)
+const MIN_KNEE=0, MAX_KNEE=160;     // physiological knee flexion clamp
+const MED_WIN=5;                    // median window for outlier rejection
+
+// ──────────────────── One-Euro filter ─────────────────────
+class OneEuro{
+  constructor(min=1.2,beta=0.25,d=1.0){this.min=min;this.beta=beta;this.d=d;
+    this.x=null;this.dx=0;this.t=null;this.freq=30;}
+  alpha(c){const te=1/this.freq,tau=1/(2*Math.PI*c);return 1/(1+tau/te);}
+  filt(x,t){
+    if(this.x===null){this.x=x;this.t=t;return x;}
+    if(t>this.t)this.freq=1/(t-this.t); this.t=t;
+    const dx=(x-this.x)*this.freq, ad=this.alpha(this.d);
+    const dxh=ad*dx+(1-ad)*this.dx;
+    const cut=this.min+this.beta*Math.abs(dxh), a=this.alpha(cut);
+    const xh=a*x+(1-a)*this.x; this.x=xh; this.dx=dxh; return xh;
+  }
+}
+
+// ───────────────────────── Math ───────────────────────────
+function angle3d(a,b,c){
+  const ba=[a.x-b.x,a.y-b.y,a.z-b.z], bc=[c.x-b.x,c.y-b.y,c.z-b.z];
+  const n1=Math.hypot(...ba), n2=Math.hypot(...bc);
+  if(n1<1e-6||n2<1e-6)return null;
+  const d=(ba[0]*bc[0]+ba[1]*bc[1]+ba[2]*bc[2])/(n1*n2);
+  return Math.acos(Math.max(-1,Math.min(1,d)))*180/Math.PI;
+}
+function angle2d(a,b,c,asp){
+  const ba=[(a.x-b.x)*asp,a.y-b.y], bc=[(c.x-b.x)*asp,c.y-b.y];
+  const n1=Math.hypot(...ba), n2=Math.hypot(...bc);
+  if(n1<1e-6||n2<1e-6)return null;
+  const d=(ba[0]*bc[0]+ba[1]*bc[1])/(n1*n2);
+  return Math.acos(Math.max(-1,Math.min(1,d)))*180/Math.PI;
+}
+const clinFlex = raw => Math.max(0,180-raw);
+function kneeState(flex){
+  if(flex<10) return["FULL EXTENSION","#39ff14"];
+  if(flex<40) return["SLIGHT FLEX","#00ff80"];
+  if(flex<90) return["MODERATE FLEX","#00dcff"];
+  if(flex<120)return["DEEP FLEX","#ffa500"];
+  return["MAX FLEX","#ff3250"];
+}
+function vis(p){ return (p && p.visibility!=null) ? p.visibility : 1; }
+function detectView(lm){
+  const ls=lm[P.L_SH],rs=lm[P.R_SH];
+  if(vis(ls)<.4||vis(rs)<.4)return["—","#9aa0c0"];
+  const sdx=Math.abs(rs.x-ls.x);
+  const lh=lm[P.L_HIP],rh=lm[P.R_HIP];
+  const hdx=(vis(lh)>.3&&vis(rh)>.3)?Math.abs(rh.x-lh.x):.18;
+  const r=sdx/Math.max(hdx,.04);
+  if(r<.30)return["SIDE","#ffa500"];
+  if(r>.80)return["FRONTAL","#39ff14"];
+  return["ANGLED","#00dcff"];
+}
+
+// ─────────────────────── DOM / state ──────────────────────
+const video=document.getElementById("video"),
+      canvas=document.getElementById("overlay"), ctx=canvas.getContext("2d");
+const $=id=>document.getElementById(id);
+let landmarker=null, stream=null, facing="environment", mirror=false, delegate="GPU";
+let running=false, lastT=performance.now(), fps=0, lastVideoTime=-1, lastRes=null;
+let showLabels=true, cover={scale:1,ox:0,oy:0};
+let lastStat=0, diagStr="—", viewStr="View: —", viewCol="#9aa0c0";
+const HUD_MS=1000;
+const fX=[], fY=[]; for(let i=0;i<33;i++){fX[i]=new OneEuro();fY[i]=new OneEuro();}
+// knee measurement state
+const kFilt={L:new OneEuro(0.5,0.10), R:new OneEuro(0.5,0.10)};
+const kHold={}, kRom={L:[180,0],R:[180,0]}, kRep={L:{n:0,phase:"straight"},R:{n:0,phase:"straight"}};
+const kMed={L:[],R:[]};              // raw-angle window for median outlier rejection
+const calib={L:0,R:0};               // extension calibration offset (deg)
+let lastShown={L:null,R:null};
+let recording=false, session=[], sessionStart=0;
+
+function median(a){const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+// Calibrate the currently-measured knee(s) so a straight leg reads exactly 0°
+// (removes each person's/camera's systematic offset — like zeroing a goniometer).
+function calibrateNow(side){
+  const sides=side?[side]:["L","R"], done=[];
+  for(const s of sides){ if(lastShown[s]&&lastShown[s].valid){ calib[s]+=lastShown[s].live; done.push(s);} }
+  toast(done.length ? "Calibrated "+done.join(" & ")+" → 0°"
+                    : "Hold leg straight & in view, then tap Cal");
+  return done;
+}
+
+function toast(m){const t=$("toast");t.textContent=m;t.style.opacity=1;
+  clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,2200);}
+
+// ─────────────────────── Setup ────────────────────────────
+async function loadModel(){
+  $("loadmsg").textContent="Loading tracking model… (first time ~10 MB)";
+  const vision=await FilesetResolver.forVisionTasks(WASM);
+  const opts=del=>({baseOptions:{modelAssetPath:POSE_MODEL,delegate:del},
+    runningMode:"VIDEO",numPoses:1,
+    minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
+  try{ landmarker=await PoseLandmarker.createFromOptions(vision,opts("GPU")); delegate="GPU"; }
+  catch(e){ $("loadmsg").textContent="GPU unavailable, using CPU…";
+    landmarker=await PoseLandmarker.createFromOptions(vision,opts("CPU")); delegate="CPU"; }
+}
+function applyMirror(){ video.style.transform = mirror ? "scaleX(-1)" : "none"; }
+async function startCamera(){
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  mirror=(facing==="user"); applyMirror();
+  let s;
+  try{ s=await navigator.mediaDevices.getUserMedia({audio:false,
+      video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720}}}); }
+  catch(e){ s=await navigator.mediaDevices.getUserMedia({audio:false,video:true}); }
+  stream=s; video.srcObject=s;
+  await new Promise(r=>{ if(video.readyState>=1)r(); else video.onloadedmetadata=()=>r(); });
+  await video.play(); resize();
+}
+function resize(){ canvas.width=canvas.clientWidth; canvas.height=canvas.clientHeight; computeCover(); }
+function computeCover(){
+  const vw=video.videoWidth, vh=video.videoHeight;
+  if(!vw||!vh){cover={scale:1,ox:0,oy:0};return;}
+  const s=Math.max(canvas.width/vw, canvas.height/vh);
+  cover={scale:s, ox:(canvas.width-vw*s)/2, oy:(canvas.height-vh*s)/2, vw, vh};
+}
+window.addEventListener("resize",resize);
+window.addEventListener("orientationchange",()=>setTimeout(resize,300));
+function px(sx,sy){
+  if(!cover.vw)computeCover();
+  const nx=mirror?(1-sx):sx;
+  return [cover.ox+nx*cover.vw*cover.scale, cover.oy+sy*cover.vh*cover.scale];
+}
+
+// ─────────────────────── Render loop ──────────────────────
+function loop(){
+  if(!running)return;
+  const now=performance.now();
+  if(landmarker && video.readyState>=2){
+    if(!canvas.width || canvas.width!==canvas.clientWidth) resize();
+    if(video.currentTime!==lastVideoTime){
+      lastVideoTime=video.currentTime;
+      try{ lastRes=landmarker.detectForVideo(video,now); }catch(e){}
+    }
+    fps=fps*0.9 + (1000/Math.max(now-lastT,1))*0.1; lastT=now;
+    draw(lastRes,now);
+  }
+  requestAnimationFrame(loop);
+}
+
+function draw(res,now){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const have = res && res.landmarks && res.landmarks.length>0;
+  $("poseDot").style.background = have ? "var(--green)":"var(--red)";
+  $("poseTxt").textContent = have ? "Pose OK":"No pose";
+
+  const shown={L:null,R:null};
+  if(have){
+    const raw=res.landmarks[0];
+    const wlm=(res.worldLandmarks&&res.worldLandmarks[0])||raw;
+    const t=now/1000;
+    const sm=raw.map((p,i)=>({x:fX[i].filt(p.x,t),y:fY[i].filt(p.y,t),z:p.z,visibility:vis(p)}));
+    const nVis=sm.filter(p=>p.visibility>=VIS_DRAW).length;
+    diagStr=delegate+" · "+nVis+"/33 joints";
+    const [vl,vc]=detectView(sm); viewStr="View: "+vl; viewCol=vc;
+    const asp=(video.videoWidth/video.videoHeight)||(16/9);
+
+    // side view → hide far side; also decide which knee(s) to measure
+    let hidden=null, measure={L:true,R:true};
+    if(vl==="SIDE"){
+      let ls=0,rs=0;
+      for(const i of LEFT_IDX)  ls+=sm[i].visibility;
+      for(const i of RIGHT_IDX) rs+=sm[i].visibility;
+      const nearL = ls>=rs;
+      hidden=new Set(nearL?RIGHT_IDX:LEFT_IDX);
+      measure={L:nearL, R:!nearL};
+      viewStr="View: SIDE ("+(nearL?"L":"R")+")";
+    }
+
+    // bones
+    ctx.lineWidth=4; ctx.lineCap="round"; ctx.strokeStyle="#00dcff99";
+    for(const c of CONNECTIONS){
+      if(hidden&&(hidden.has(c.start)||hidden.has(c.end)))continue;
+      const a=sm[c.start],b=sm[c.end];
+      if(a.visibility<VIS_DRAW||b.visibility<VIS_DRAW)continue;
+      const pa=px(a.x,a.y),pb=px(b.x,b.y);
+      ctx.beginPath();ctx.moveTo(pa[0],pa[1]);ctx.lineTo(pb[0],pb[1]);ctx.stroke();
+    }
+    // joints + labels
+    for(let i=0;i<sm.length;i++){
+      if(hidden&&hidden.has(i))continue;
+      const v=sm[i].visibility; if(v<VIS_DRAW)continue;
+      const [x,y]=px(sm[i].x,sm[i].y);
+      ctx.beginPath();ctx.arc(x,y,v>=VIS_HI?5:4,0,7);
+      ctx.fillStyle=v>=VIS_HI?"#00dcff":"#ffa500";ctx.fill();
+      ctx.lineWidth=1.5;ctx.strokeStyle="#0b0a14";ctx.stroke();
+      if(showLabels && LABELS[i] && v>=VIS_LABEL && !(hidden&&hidden.has(i))) drawLabel(x,y,LABELS[i]);
+    }
+
+    // ── knee angle measurement (goniometer-grade pipeline) ──
+    const clamp=v=>Math.max(MIN_KNEE,Math.min(MAX_KNEE,v));
+    for(const side of ["L","R"]){
+      const K=KNEES[side];
+      if(!measure[side]){ kMed[side].length=0; shown[side]=null; continue; }
+      const conf=Math.min(sm[K.hip].visibility,sm[K.knee].visibility,sm[K.ankle].visibility);
+      if(conf<VIS_KNEE){ shown[side]=null; continue; }
+      // view-adaptive raw angle: 2-D sagittal (side) / 3-D world (else)
+      let rawA=(vl==="SIDE")?angle2d(sm[K.hip],sm[K.knee],sm[K.ankle],asp)
+                            :angle3d(wlm[K.hip],wlm[K.knee],wlm[K.ankle]);
+      if(rawA===null) rawA=angle3d(wlm[K.hip],wlm[K.knee],wlm[K.ankle]);
+      if(rawA===null){ shown[side]=null; continue; }
+      // median window rejects single-frame spikes, then One-Euro smooths
+      const win=kMed[side]; win.push(rawA); if(win.length>MED_WIN)win.shift();
+      const smA=kFilt[side].filt(median(win),t);
+      // deadband hold → steady display; continuous value → live
+      let hv=kHold[side];
+      if(hv===undefined||Math.abs(smA-hv)>DEADBAND) hv=smA;
+      kHold[side]=hv;
+      const live=clamp(clinFlex(smA)-calib[side]);   // continuous, for ROM/reps/data
+      const disp=clamp(clinFlex(hv)-calib[side]);     // steady, for on-screen number
+      const valid=conf>=VIS_KNEE;
+      if(valid){
+        kRom[side][0]=Math.min(kRom[side][0],live);
+        kRom[side][1]=Math.max(kRom[side][1],live);
+        const rp=kRep[side];
+        if(rp.phase==="straight" && live>REP_BENT) rp.phase="bent";
+        else if(rp.phase==="bent" && live<REP_STRAIGHT){ rp.phase="straight"; rp.n++; }
+      }
+      shown[side]={flex:disp, live, conf, valid, calibrated:calib[side]!==0};
+      drawKneeArc(sm[K.hip],sm[K.knee],sm[K.ankle],disp,K.color);
+    }
+    lastShown=shown;
+
+    if(recording){
+      session.push({t:(now-sessionStart)/1000,
+        L: shown.L? +shown.L.live.toFixed(1):null,
+        R: shown.R? +shown.R.live.toFixed(1):null});
+    }
+  }else{
+    viewStr="View: —"; viewCol="#9aa0c0"; diagStr=delegate+" · 0/33 joints";
+    drawCenter("No person detected  —  step into frame","#ffa500");
+  }
+
+  updateKneePanel(shown);
+  if(now-lastStat>=HUD_MS){
+    lastStat=now;
+    $("fpsTxt").textContent=Math.round(fps)+" fps";
+    $("diagTxt").textContent=diagStr;
+    $("viewTxt").textContent=viewStr; $("viewTxt").style.color=viewCol;
+  }
+}
+
+function drawKneeArc(hip,knee,ankle,flex,col){
+  const v=px(knee.x,knee.y), a=px(hip.x,hip.y), c=px(ankle.x,ankle.y);
+  const a1=Math.atan2(a[1]-v[1],a[0]-v[0]), a2=Math.atan2(c[1]-v[1],c[0]-v[0]);
+  let sweep=(a2-a1); while(sweep<-Math.PI)sweep+=2*Math.PI; while(sweep>Math.PI)sweep-=2*Math.PI;
+  ctx.beginPath();ctx.strokeStyle=col;ctx.lineWidth=4;
+  ctx.arc(v[0],v[1],36,Math.min(a1,a1+sweep),Math.max(a1,a1+sweep));ctx.stroke();
+  ctx.beginPath();ctx.fillStyle=col;ctx.arc(v[0],v[1],7,0,7);ctx.fill();
+  const mid=a1+sweep/2, tx=v[0]+66*Math.cos(mid), ty=v[1]+66*Math.sin(mid);
+  ctx.font="bold 22px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+  const s=Math.round(flex)+"°", w=ctx.measureText(s).width;
+  ctx.fillStyle="#000c";ctx.fillRect(tx-w/2-6,ty-15,w+12,30);
+  ctx.fillStyle=col;ctx.fillText(s,tx,ty);
+}
+function drawLabel(x,y,text){
+  ctx.font="bold 12px sans-serif";ctx.textAlign="left";ctx.textBaseline="middle";
+  const w=ctx.measureText(text).width;
+  let lx=x+9, ly=y-2;
+  if(lx+w+8>canvas.width) lx=x-w-17;
+  ly=Math.max(11,Math.min(canvas.height-11,ly));
+  ctx.fillStyle="#000b";ctx.fillRect(lx-3,ly-9,w+8,18);
+  ctx.fillStyle="#ffffff";ctx.fillText(text,lx+1,ly);
+}
+function drawCenter(text,col){
+  ctx.font="bold 16px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+  const w=ctx.measureText(text).width;
+  ctx.fillStyle="#000a";ctx.fillRect(canvas.width/2-w/2-10,canvas.height/2-16,w+20,32);
+  ctx.fillStyle=col;ctx.fillText(text,canvas.width/2,canvas.height/2);
+}
+
+function updateKneePanel(shown){
+  for(const side of ["L","R"]){
+    const s=shown[side], id=side==="L"?"kL":"kR";
+    if(s){
+      const [st,sc]=kneeState(s.flex);
+      $(id+"val").innerHTML=Math.round(s.flex)+'<small>° flex</small>';
+      $(id+"val").style.color=sc;
+      $(id+"state").textContent=(s.calibrated?"✓ ":"")+st+"  "+Math.round(s.conf*100)+"%";
+      $(id+"state").style.color=sc;
+      $(id+"rom").textContent=`ROM ${Math.round(kRom[side][0])}–${Math.round(kRom[side][1])}°`;
+      $(id+"rep").textContent=`reps ${kRep[side].n}`;
+    }else{
+      $(id+"val").innerHTML='—<small>°</small>'; $(id+"val").style.color="var(--muted)";
+      $(id+"state").textContent="";
+    }
+  }
+}
+
+// ─────────────────── Recording / report ───────────────────
+function setRec(on){
+  recording=on;
+  $("recDot").style.display=on?"block":"none";
+  $("recTxt").style.display=on?"inline":"none";
+  $("btnRec").innerHTML=on?"⏹ Stop":"⏺ Record";
+  $("btnRec").classList.toggle("primary",on);
+  if(on){session=[];sessionStart=performance.now();toast("Recording knee motion…");}
+  else{ $("btnReport").disabled=session.length===0; openReport(); }
+}
+function openReport(){
+  const body=$("reportBody"); body.innerHTML="";
+  const dur=session.length?session[session.length-1].t:0;
+  let t=`<div class="card"><h4>Session summary</h4>
+    <div class="sub">${session.length} frames · ${dur.toFixed(1)} s</div>
+    <table><tr><th>Knee</th><th>Min flex</th><th>Peak flex</th><th>ROM</th><th>Reps</th></tr>`;
+  for(const side of ["L","R"]){
+    const lo=kRom[side][0],hi=kRom[side][1];
+    if(hi<=lo)continue;
+    t+=`<tr><td>${side==="L"?"Left":"Right"}</td><td>${lo.toFixed(0)}°</td>
+        <td>${hi.toFixed(0)}°</td><td>${(hi-lo).toFixed(0)}°</td><td>${kRep[side].n}</td></tr>`;
+  }
+  t+="</table></div>";
+  body.innerHTML=t;
+  for(const side of ["L","R"]){
+    const ser=session.map(s=>({t:s.t,v:s[side]})).filter(p=>p.v!=null);
+    if(ser.length<2)continue;
+    const card=document.createElement("div");card.className="card";
+    card.innerHTML=`<h4>${side==="L"?"Left":"Right"} knee flexion over time</h4>
+                    <div class="sub">degrees vs seconds</div>`;
+    const cv=document.createElement("canvas");cv.className="chart";card.appendChild(cv);
+    body.appendChild(card);
+    requestAnimationFrame(()=>lineChart(cv,ser,side==="L"?"#39ff14":"#00ff80"));
+  }
+  if(!session.length) body.innerHTML=`<div class="card"><p>No data recorded.</p></div>`;
+  $("report").style.display="flex";
+}
+function lineChart(cv,ser,col){
+  const dpr=window.devicePixelRatio||1;
+  cv.width=cv.clientWidth*dpr; cv.height=cv.clientHeight*dpr;
+  const g=cv.getContext("2d"); g.scale(dpr,dpr);
+  const W=cv.clientWidth,H=cv.clientHeight,pad=30;
+  const xs=ser.map(p=>p.t),ys=ser.map(p=>p.v);
+  const x0=Math.min(...xs),x1=Math.max(...xs);
+  const y0=Math.min(...ys,0),y1=Math.max(...ys,10);
+  const sx=t=>pad+(t-x0)/Math.max(x1-x0,1e-6)*(W-pad-8);
+  const sy=v=>H-pad-(v-y0)/Math.max(y1-y0,1)*(H-pad-8);
+  g.strokeStyle="#ffffff20";g.lineWidth=1;g.font="9px sans-serif";g.fillStyle="#9aa0c0";
+  for(let i=0;i<=3;i++){const v=y0+(y1-y0)*i/3,y=sy(v);
+    g.beginPath();g.moveTo(pad,y);g.lineTo(W-8,y);g.stroke();g.fillText(v.toFixed(0)+"°",2,y+3);}
+  g.fillText(x0.toFixed(1)+"s",pad,H-8);g.fillText(x1.toFixed(1)+"s",W-30,H-8);
+  g.strokeStyle=col;g.lineWidth=2;g.beginPath();
+  ser.forEach((p,i)=>{const X=sx(p.t),Y=sy(p.v);i?g.lineTo(X,Y):g.moveTo(X,Y);});g.stroke();
+}
+function exportCSV(){
+  const lines=["time_s,left_knee_flex,right_knee_flex"];
+  for(const s of session) lines.push(`${s.t.toFixed(3)},${s.L??""},${s.R??""}`);
+  download("movelab_knee_"+Date.now()+".csv","text/csv",lines.join("\n"));
+}
+function exportJSON(){
+  const rom={}; for(const s of ["L","R"]) rom[s]={min:+kRom[s][0].toFixed(1),max:+kRom[s][1].toFixed(1),reps:kRep[s].n};
+  download("movelab_knee_"+Date.now()+".json","application/json",
+    JSON.stringify({recordedAt:new Date().toISOString(),metric:"knee_flexion_deg",
+                    rom, frames:session.length, samples:session},null,1));
+}
+function download(name,type,data){
+  const b=new Blob([data],{type}),u=URL.createObjectURL(b);
+  const a=document.createElement("a");a.href=u;a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);toast("Downloaded "+name);
+}
+
+// ─────────────────────── Controls ─────────────────────────
+$("btnStart").onclick=async()=>{
+  $("btnStart").style.display="none"; $("spin").style.display="block";
+  try{
+    if(!landmarker)await loadModel();
+    $("loadmsg").textContent="Starting camera…";
+    await startCamera();
+    $("splash").style.display="none"; running=true; loop();
+  }catch(e){ $("spin").style.display="none"; $("btnStart").style.display="block";
+    $("loadmsg").textContent="Error: "+(e.message||e); }
+};
+$("btnFlip").onclick=()=>{mirror=!mirror;applyMirror();toast("Mirror "+(mirror?"on":"off"));};
+$("btnCal").onclick=()=>calibrateNow();
+$("btnLabels").onclick=()=>{showLabels=!showLabels;
+  $("btnLabels").classList.toggle("primary",showLabels);
+  toast("Joint labels "+(showLabels?"on":"off"));};
+$("btnRec").onclick=()=>setRec(!recording);
+$("btnReport").onclick=openReport;
+$("btnReset").onclick=()=>{kRom.L=[180,0];kRom.R=[180,0];kRep.L={n:0,phase:"straight"};
+  kRep.R={n:0,phase:"straight"};calib.L=0;calib.R=0;session=[];
+  $("btnReport").disabled=true;toast("ROM, reps & calibration reset");};
+$("btnCsv").onclick=exportCSV;
+$("btnJson").onclick=exportJSON;
+$("btnClose").onclick=()=>$("report").style.display="none";
+
+if(!window.isSecureContext && location.hostname!=="localhost"){
+  $("loadmsg").textContent="⚠ Open over HTTPS (e.g. GitHub Pages) for camera access.";
+}
+</script>
+</body>
+</html>

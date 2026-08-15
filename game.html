@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0a14" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>STEADFAST — Isometric Rehab</title>
+<style>
+  :root{
+    --bg:#070a16; --panel:rgba(16,20,40,.86); --line:#26305a;
+    --txt:#eef2ff; --muted:#93a0c8; --cyan:#37e1ff; --amber:#ffb84d;
+    --green:#5dff9b; --red:#ff5d78; --beam:#ffe08a; --purple:#9a6bff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden;overscroll-behavior:none}
+  #stage{position:fixed;inset:0;background:#000}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #overlay{position:absolute;inset:0;width:100%;height:100%}
+
+  #topbar{position:fixed;top:0;left:0;right:0;display:flex;gap:6px;flex-wrap:wrap;
+    padding:max(8px,env(safe-area-inset-top)) 10px 8px;align-items:center;
+    background:linear-gradient(#000a,transparent);z-index:5;font-size:12px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:5px 10px;display:flex;gap:6px;align-items:center;backdrop-filter:blur(6px)}
+  .dot{width:8px;height:8px;border-radius:50%}
+  a.back{color:var(--cyan);text-decoration:none;font-weight:600}
+
+  #fb{position:fixed;left:50%;bottom:15%;transform:translateX(-50%);z-index:6;background:#000b;border:1px solid var(--line);
+    border-radius:22px;padding:9px 18px;font-size:15px;font-weight:700;max-width:90vw;text-align:center;display:none;backdrop-filter:blur(6px)}
+
+  #hud{position:fixed;top:52px;left:8px;right:8px;z-index:4;display:none;justify-content:space-between;gap:8px;pointer-events:none}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:7px 11px;backdrop-filter:blur(8px);text-align:center;min-width:60px}
+  .stat .l{font-size:9.5px;color:var(--muted);letter-spacing:.4px}
+  .stat .v{font-size:17px;font-weight:800;line-height:1.1}
+
+  #controls{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:10px 10px max(10px,env(safe-area-inset-bottom));
+    display:none;gap:8px;justify-content:center;flex-wrap:wrap;background:linear-gradient(transparent,#000c)}
+  button{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:11px 14px;
+    font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center;min-width:60px;justify-content:center}
+  button:active{transform:scale(.95)}
+  button.primary{background:var(--cyan);color:#00121a;border-color:transparent}
+  button.warn{background:var(--amber);color:#1a1000;border-color:transparent}
+  button.ghost{background:transparent}
+
+  .screen{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:22px;gap:12px;background:radial-gradient(circle at 50% 22%,#141a38,#05070f);overflow:auto}
+  .screen h1{margin:0;font-size:26px;letter-spacing:1px;background:linear-gradient(90deg,var(--beam),var(--cyan));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .screen .tag{color:var(--txt);font-size:14px;font-weight:600;margin:-6px 0 0}
+  .screen p{color:var(--muted);max-width:400px;line-height:1.5;font-size:13.5px;margin:0}
+  .big{font-size:16px;padding:15px 26px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;max-width:440px;width:100%;text-align:left}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:9px 0}
+  .row label{font-size:13px;color:var(--txt)} .row .val{font-size:13px;color:var(--cyan);font-weight:700;min-width:54px;text-align:right}
+  input[type=range]{flex:1;accent-color:var(--cyan)}
+  .beacons{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:440px;width:100%}
+  .beacon{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 10px;cursor:pointer;text-align:left}
+  .beacon.sel{border-color:var(--beam);box-shadow:0 0 0 1px var(--beam) inset}
+  .beacon .bn{font-size:13.5px;font-weight:700} .beacon .bx{font-size:11px;color:var(--muted);margin-top:2px}
+  .beacon .lv{font-size:9px;font-weight:700;letter-spacing:.5px;color:var(--cyan)}
+  #loadmsg{color:var(--cyan);font-size:13px;min-height:18px;max-width:340px}
+  .spinner{width:34px;height:34px;border:3px solid #ffffff20;border-top-color:var(--cyan);border-radius:50%;animation:spin 1s linear infinite;display:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .safety{font-size:11.5px;color:var(--amber);max-width:400px;line-height:1.45}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  td,th{text-align:left;padding:5px 6px;border-bottom:1px solid #ffffff12} th{color:var(--muted);font-weight:600}
+  .stars{color:var(--beam);font-size:15px}
+  .tiles{display:flex;gap:8px;max-width:440px;width:100%;flex-wrap:wrap}
+  .tile{flex:1;min-width:80px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px;text-align:center}
+  .tile .tv{font-size:20px;font-weight:800;color:var(--cyan)} .tile .tl{font-size:10px;color:var(--muted)}
+  .pain{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:400px}
+  .pain b{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-weight:700;cursor:pointer;background:var(--panel)} .pain b.sel{background:var(--cyan);color:#00121a;border-color:transparent}
+  .coast{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:440px}
+  .lamp{width:80px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 6px;text-align:center}
+  .lamp .ic{font-size:22px} .lamp.lit .ic{filter:drop-shadow(0 0 6px var(--beam))} .lamp.lit{border-color:var(--beam)}
+  .lamp .nm{font-size:9.5px;color:var(--muted);margin-top:2px}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:40;background:#000d;border:1px solid var(--line);
+    border-radius:20px;padding:8px 16px;font-size:13px;opacity:0;transition:opacity .3s;text-align:center;max-width:90vw}
+  .countbig{position:fixed;inset:0;z-index:8;display:none;align-items:center;justify-content:center;font-size:120px;font-weight:900;
+    color:var(--beam);text-shadow:0 0 30px #ffe08a88;pointer-events:none}
+  .linkrow{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:13px}
+  .linkrow a{color:var(--muted);text-decoration:none;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div id="stage"><video id="video" playsinline autoplay muted></video><canvas id="overlay"></canvas></div>
+
+<div id="topbar">
+  <a class="back" href="index.html">← Tracker</a>
+  <div class="chip"><span class="dot" id="poseDot" style="background:var(--red)"></span><span id="poseTxt">No pose</span></div>
+  <div class="chip"><span id="viewTxt">View: —</span></div>
+  <div class="chip"><span id="fpsTxt">— fps</span></div>
+  <div class="chip"><span id="resTxt">—</span></div>
+</div>
+
+<div id="hud">
+  <div class="stat"><div class="l" id="hBeaconL">BEACON</div><div class="v" id="hBeacon">—</div></div>
+  <div class="stat"><div class="l">HOLD</div><div class="v" id="hHold">0.0s</div></div>
+  <div class="stat"><div class="l">SET</div><div class="v" id="hSet">1/5</div></div>
+  <div class="stat"><div class="l">SHIPS</div><div class="v" id="hScore">0</div></div>
+</div>
+
+<div id="fb"></div>
+<div class="countbig" id="countbig"></div>
+
+<div id="controls">
+  <button id="btnStop" class="warn">■ End set</button>
+  <button id="btnCal2" class="primary">🎯 Re-cal</button>
+  <button id="btnSwitch2">🔄 Cam</button>
+  <button id="btnMirror2">🪞 Flip</button>
+  <button id="btnVoice2">🔊 Voice</button>
+</div>
+
+<!-- MENU -->
+<div class="screen" id="menu">
+  <h1>STEADFAST</h1>
+  <div class="tag">Hold steady. Keep the light burning.</div>
+  <p>Pick a beacon, or run tonight’s full watch. Each beacon is an isometric hold —
+     the light burns while you hold your stance steady.</p>
+  <div class="beacons" id="beaconGrid"></div>
+  <div class="card">
+    <div class="row"><label id="lTarget">Target</label><input id="cTarget" type="range" min="0" max="110" step="1" value="60"><span class="val" id="vTarget">60°</span></div>
+    <div class="row" id="rowBand"><label>Zone width (±)</label><input id="cBand" type="range" min="3" max="20" step="1" value="12"><span class="val" id="vBand">12°</span></div>
+    <div class="row"><label>Hold time</label><input id="cHold" type="range" min="5" max="45" step="1" value="20"><span class="val" id="vHold">20s</span></div>
+    <div class="row"><label>Holds (sets)</label><input id="cSets" type="range" min="1" max="10" step="1" value="5"><span class="val" id="vSets">5</span></div>
+    <div class="row"><label>Rest between</label><input id="cRest" type="range" min="10" max="60" step="5" value="30"><span class="val" id="vRest">30s</span></div>
+  </div>
+  <p class="safety" id="safety">⚠ Keep it pain-free (stop if pain &gt;4/10). Breathe throughout — never hold your breath.</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <button id="btnStart" class="primary big">▶ Start beacon</button>
+    <button id="btnWatch" class="big">🌙 Full watch (all 4)</button>
+  </div>
+  <div class="linkrow"><a href="arcade.html">🔮 Crystal Guardian</a><a href="play.html">🎈 Sky Trail</a><a id="lnkProgress">🗺 Progress</a><a id="lnkVoice">🔊 Voice: on</a></div>
+  <div class="spinner" id="spin"></div>
+  <div id="loadmsg"></div>
+</div>
+
+<!-- PAIN CHECK -->
+<div class="screen" id="pain" style="display:none">
+  <h1 id="painTitle">Pain check</h1>
+  <p id="painMsg">Before we start — how is your knee pain right now? (0 = none, 10 = worst)</p>
+  <div class="pain" id="painScale"></div>
+  <p class="safety" id="painWarn" style="visibility:hidden">Pain &gt;4/10 — take it gently, reduce depth/hold, and stop if it worsens.</p>
+  <button id="btnPainNext" class="primary big">Continue</button>
+</div>
+
+<!-- CALIBRATE -->
+<div class="screen" id="calib" style="display:none">
+  <h1>Calibrate</h1>
+  <p id="calMsg">Get into position. Straighten the leg, tap <b>Set 0°</b>, then begin.</p>
+  <div class="card" style="text-align:center">
+    <div style="color:var(--muted);font-size:12px" id="calLabel">LIVE READING</div>
+    <div id="calVal" style="font-size:46px;font-weight:800;color:var(--cyan)">—</div>
+    <div id="calConf" style="color:var(--muted);font-size:12px">confidence —</div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <button id="btnSetZero" class="primary">🎯 Set 0°</button>
+    <button id="btnBegin" class="primary big">✓ Begin watch</button>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <button id="btnSwitch">🔄 Switch camera</button>
+    <button id="btnMirror">🪞 Mirror</button>
+    <button id="btnBackMenu" class="ghost">← Menu</button>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- RESULTS -->
+<div class="screen" id="results" style="display:none">
+  <h1>Watch complete</h1>
+  <div class="card" id="resBody"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+    <button id="btnCsv">⬇ CSV</button><button id="btnJson">⬇ JSON</button>
+    <button id="btnMap">🗺 Coast map</button><button id="btnAgain" class="primary">↻ Menu</button>
+  </div>
+</div>
+
+<!-- PROGRESS / COAST MAP -->
+<div class="screen" id="progress" style="display:none">
+  <h1>Coast Map</h1>
+  <div class="coast" id="coast"></div>
+  <div class="tiles" id="progTiles"></div>
+  <div class="card" id="progBody"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+    <button id="btnClearHist" class="ghost">Clear history</button>
+    <button id="btnProgBack" class="primary">← Menu</button>
+  </div>
+</div>
+
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
+import { OneEuro, detectView, KneeMeter, KNEES, vis, VIS_DRAW } from "./js/core.js";
+import { HoldDetector, FB } from "./js/holdDetector.js";
+import { loadSessions, saveSession, clearSessions, summarize } from "./js/storage.js";
+import { BEACONS, MVP_BEACONS, hipCentre } from "./js/beacons.js";
+
+const POSE_MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/wasm";
+const CONNECTIONS=PoseLandmarker.POSE_CONNECTIONS;
+const $=id=>document.getElementById(id);
+const video=$("video"), canvas=$("overlay"), ctx=canvas.getContext("2d");
+const BEACON_ICON={harbor:"🏮",cliff:"🗼",anchor:"⚓",keystone:"🌉"};
+
+// ── camera / pose state ──
+let landmarker=null, stream=null, facing="user", mirror=true, delegate="GPU";
+let camDevices=[], camIdx=0;
+let running=false, lastT=performance.now(), fps=0, lastVideoTime=-1, lastRes=null;
+let cover={scale:1,ox:0,oy:0};
+const fX=[],fY=[]; for(let i=0;i<33;i++){fX[i]=new OneEuro();fY[i]=new OneEuro();}
+const meter=new KneeMeter();
+let lastMeasured={activeFlex:null,activeConf:0}, lastHipC=null;
+
+// ── game state ──
+const cfg={target:60,band:12,holdSecs:20,sets:5,restSecs:30};
+const det=new HoldDetector(cfg);
+let curBeaconId="harbor";
+let queue=["harbor"], qi=0, setIdx=0;
+let phase="menu", totalScore=0, setResults=[], session=[], holdStart=0, restUntil=0, countUntil=0;
+let holdBaseline=null;             // hip-centre baseline for sway beacons
+let shipsHome=0, harborParts=[];   // animated harbor scene (ships guided home)
+let painPre=null, painPost=null, painTarget="pre";
+let voiceOn=true, lastSpoken="", lastSpokeAt=0, lastBreathAt=0;
+
+// ── helpers ──
+function toast(m){const t=$("toast");if(!t)return;t.textContent=m;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,2000);}
+function showScreen(id){for(const s of ["menu","pain","calib","results","progress"])$(s).style.display=(s===id)?"flex":"none";}
+function hudOn(on){$("hud").style.display=on?"flex":"none";$("controls").style.display=on?"flex":"none";}
+const curBeacon=()=>BEACONS[curBeaconId];
+
+// speech
+function speak(text,force){
+  if(!voiceOn||!("speechSynthesis"in window))return;
+  const now=performance.now();
+  if(!force && (text===lastSpoken) && now-lastSpokeAt<3500) return;
+  lastSpoken=text; lastSpokeAt=now;
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.rate=.95; u.pitch=1; speechSynthesis.speak(u); }catch(e){}
+}
+
+// ── beacon menu ──
+function buildBeaconGrid(){
+  const g=$("beaconGrid"); g.innerHTML="";
+  for(const id of MVP_BEACONS){ const b=BEACONS[id];
+    const d=document.createElement("div"); d.className="beacon"; d.dataset.b=id;
+    d.innerHTML=`<div class="lv">${BEACON_ICON[id]||"✦"} ${b.level}</div><div class="bn">${b.beacon}</div><div class="bx">${b.exercise}</div>`;
+    d.onclick=()=>selectBeacon(id); g.appendChild(d);
+  }
+}
+function selectBeacon(id){
+  curBeaconId=id; const b=BEACONS[id]; const sway=b.unit==="sway";
+  document.querySelectorAll(".beacon").forEach(el=>el.classList.toggle("sel",el.dataset.b===id));
+  const t=$("cTarget");
+  if(sway){ // sway beacons: target fixed at 0, the slider controls allowed sway (band)
+    t.min=b.min; t.max=b.max; t.value=b.band; $("rowBand").style.display="none";
+  }else{
+    t.min=b.min; t.max=b.max; t.value=b.target; $("rowBand").style.display="";
+    $("cBand").value=b.band;
+  }
+  $("cHold").value=b.holdSecs; $("cSets").value=b.sets; $("cRest").value=b.restSecs;
+  $("lTarget").textContent=b.targetLabel; $("safety").innerHTML=b.safety;
+  syncCfg();
+}
+const sliders=[["cHold","vHold","holdSecs"],["cSets","vSets","sets"],["cRest","vRest","restSecs"]];
+function unitSuffix(){ return curBeacon().unit==="sway"?"":"°"; }
+function syncCfg(){
+  const sway=curBeacon().unit==="sway";
+  if(sway){ cfg.target=0; cfg.band=+$("cTarget").value; $("vTarget").textContent=$("cTarget").value; }
+  else{ cfg.target=+$("cTarget").value; cfg.band=+$("cBand").value;
+        $("vTarget").textContent=cfg.target+"°"; $("vBand").textContent=cfg.band+"°"; }
+  for(const [id,vid,key] of sliders){ cfg[key]=+$(id).value; $(vid).textContent=$(id).value+(key==="sets"?"":"s"); }
+  det.configure(cfg);
+}
+for(const [id] of sliders){ $(id).addEventListener("input",syncCfg); }
+$("cTarget").addEventListener("input",syncCfg); $("cBand").addEventListener("input",syncCfg);
+
+// ── camera / model ──
+async function loadModel(){
+  $("loadmsg").textContent="Loading tracking model… (first time ~10 MB)";
+  const vision=await FilesetResolver.forVisionTasks(WASM);
+  const opts=del=>({baseOptions:{modelAssetPath:POSE_MODEL,delegate:del},runningMode:"VIDEO",numPoses:1,
+    minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
+  try{ landmarker=await PoseLandmarker.createFromOptions(vision,opts("GPU")); delegate="GPU"; }
+  catch(e){ landmarker=await PoseLandmarker.createFromOptions(vision,opts("CPU")); delegate="CPU"; }
+}
+function applyMirror(){ video.style.transform=mirror?"scaleX(-1)":"none"; }
+async function refreshCams(){ try{ const ds=await navigator.mediaDevices.enumerateDevices(); camDevices=ds.filter(d=>d.kind==="videoinput"); }catch(e){} }
+function camConstraints(){ const q={width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}}; const dev=camDevices[camIdx];
+  if(dev&&dev.deviceId) return {audio:false,video:{deviceId:{exact:dev.deviceId},...q}};
+  return {audio:false,video:{facingMode:{ideal:facing},...q}}; }
+async function startCamera(){
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  applyMirror();
+  let s; try{ s=await navigator.mediaDevices.getUserMedia(camConstraints()); }
+  catch(e){ try{ s=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:1920},height:{ideal:1080}}}); }
+    catch(e2){ s=await navigator.mediaDevices.getUserMedia({audio:false,video:true}); } }
+  stream=s; video.srcObject=s;
+  await new Promise(r=>{ if(video.readyState>=1)r(); else video.onloadedmetadata=()=>r(); });
+  await video.play(); resize(); await refreshCams();
+  const tr=stream.getVideoTracks()[0], st=tr?tr.getSettings():{};
+  if(st.width&&st.height)$("resTxt").textContent=st.width+"×"+st.height;
+  if(st.deviceId){ const i=camDevices.findIndex(d=>d.deviceId===st.deviceId); if(i>=0)camIdx=i; }
+}
+async function switchCamera(){ await refreshCams();
+  if(camDevices.length>1) camIdx=(camIdx+1)%camDevices.length; else facing=facing==="user"?"environment":"user";
+  try{ await startCamera(); toast("Camera "+(camDevices.length>1?("#"+(camIdx+1)+"/"+camDevices.length):facing)); }catch(e){ toast("Could not switch camera"); } }
+function toggleMirror(){ mirror=!mirror; applyMirror(); toast("Mirror "+(mirror?"on":"off")); }
+function resize(){canvas.width=canvas.clientWidth;canvas.height=canvas.clientHeight;computeCover();}
+function computeCover(){const vw=video.videoWidth,vh=video.videoHeight;if(!vw||!vh){cover={scale:1,ox:0,oy:0};return;}
+  const s=Math.max(canvas.width/vw,canvas.height/vh);cover={scale:s,ox:(canvas.width-vw*s)/2,oy:(canvas.height-vh*s)/2,vw,vh};}
+window.addEventListener("resize",resize); window.addEventListener("orientationchange",()=>setTimeout(resize,300));
+function px(sx,sy){if(!cover.vw)computeCover();const nx=mirror?(1-sx):sx;return [cover.ox+nx*cover.vw*cover.scale,cover.oy+sy*cover.vh*cover.scale];}
+
+// ── loop ──
+function loop(){ if(!running)return; const now=performance.now();
+  if(landmarker && video.readyState>=2){
+    if(!canvas.width||canvas.width!==canvas.clientWidth)resize();
+    if(video.currentTime!==lastVideoTime){lastVideoTime=video.currentTime;try{lastRes=landmarker.detectForVideo(video,now);}catch(e){}}
+    fps=fps*0.9+(1000/Math.max(now-lastT,1))*0.1; lastT=now; frame(lastRes,now);
+  } requestAnimationFrame(loop); }
+
+function frame(res,now){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const have=res&&res.landmarks&&res.landmarks.length>0;
+  $("poseDot").style.background=have?"var(--green)":"var(--red)"; $("poseTxt").textContent=have?"Pose OK":"No pose";
+  let m={valid:false,conf:0}, measured={activeFlex:null,activeConf:0}, hipC=null, vl="—";
+  if(have){
+    const raw=res.landmarks[0]; const wlm=(res.worldLandmarks&&res.worldLandmarks[0])||raw; const t=now/1000;
+    const sm=raw.map((p,i)=>({x:fX[i].filt(p.x,t),y:fY[i].filt(p.y,t),z:p.z,visibility:vis(p)}));
+    const [vlab]=detectView(sm); vl=vlab; const view=vl; const asp=(video.videoWidth/video.videoHeight)||(16/9);
+    measured=meter.measure(sm,wlm,view,asp); lastMeasured=measured;
+    hipC=hipCentre(sm); lastHipC=hipC;
+    $("viewTxt").textContent="View: "+(measured.near?view+" ("+measured.near+")":view);
+    drawSkeleton(sm,measured);
+    // per-beacon measurement
+    m=curBeacon().compute({sm,wlm,asp,view,knee:measured,hipC,baseline:holdBaseline});
+  }else if(phase==="holding"||phase==="rest"){ drawCenter("Step into frame","#ffb84d"); }
+  $("fpsTxt").textContent=Math.round(fps)+" fps";
+
+  if(phase==="countdown"){ const rem=Math.ceil((countUntil-now)/1000);
+    if(rem<=0){ enterHold(now); } else { $("countbig").style.display="flex"; $("countbig").textContent=rem; speak("Ease into position"); } }
+  else { $("countbig").style.display="none"; }
+
+  if(phase==="holding"){
+    const val = m.valid ? m.value : null;
+    const opts = (m.gate===false) ? {gate:false, feedback:FB.POSTURE} : undefined;
+    const st=det.update(val, now/1000, opts);
+    session.push({t:+((now-holdStart)/1000).toFixed(2),beacon:curBeaconId,set:setIdx+1,value:m.valid?+(+m.value).toFixed(1):null,inBand:st.inBand});
+    drawHarbor(st,now); drawBeam(st); drawBandGauge(m.valid?m.value:null, st); updateHud(st); setFeedback(st);
+    // breathing safety cue every ~11s of holding
+    if(now-lastBreathAt>11000 && st.holdTime>4){ lastBreathAt=now; speak("Keep breathing"); }
+    if(st.justSucceeded){ shipsHome++; harborBurst(); speak("Well held — a ship reaches harbour"); endSet(); }
+    else if(st.timeTotal>Math.max(cfg.holdSecs*4,40)){ endSet(); }
+  }
+  if(phase==="rest"){ const rem=Math.ceil((restUntil-now)/1000);
+    const nextTxt = setIdx>=cfg.sets ? ("Next beacon: "+(BEACONS[queue[qi]]?BEACONS[queue[qi]].beacon:"—")) : ("Hold "+(setIdx+1)+"/"+cfg.sets);
+    drawCenter("Rest & breathe — "+Math.max(rem,0)+"s   ("+nextTxt+")","#37e1ff");
+    if(rem<=0){ phase="countdown"; countUntil=now+3000; } }
+  if(phase==="calibrate"){ $("calVal").textContent = m.valid ? (Math.round(m.value)+unitSuffix()) : "—"; $("calConf").textContent="confidence "+Math.round((m.conf||0)*100)+"%"; }
+}
+
+// ── drawing ──
+function drawSkeleton(sm,measured){
+  ctx.lineWidth=4;ctx.lineCap="round";ctx.strokeStyle="#37e1ff66";
+  for(const c of CONNECTIONS){const a=sm[c.start],b=sm[c.end];if(a.visibility<VIS_DRAW||b.visibility<VIS_DRAW)continue;
+    const pa=px(a.x,a.y),pb=px(b.x,b.y);ctx.beginPath();ctx.moveTo(pa[0],pa[1]);ctx.lineTo(pb[0],pb[1]);ctx.stroke();}
+  for(let i=0;i<sm.length;i++){if(sm[i].visibility<VIS_DRAW)continue;const [x,y]=px(sm[i].x,sm[i].y);
+    ctx.beginPath();ctx.arc(x,y,4,0,7);ctx.fillStyle="#37e1ff";ctx.fill();}
+  const act=measured.active; if(act&&measured[act]){const K=KNEES[act],k=sm[K.knee],[x,y]=px(k.x,k.y);
+    ctx.beginPath();ctx.arc(x,y,10,0,7);ctx.strokeStyle=K.color;ctx.lineWidth=3;ctx.stroke();}
+}
+// lighthouse beam: length/opacity = brightness (steadiness); ring = hold progress
+function drawBeam(st){
+  const cx=canvas.width/2, cy=canvas.height/2, R=Math.min(canvas.width,canvas.height)*0.17;
+  const b=st.brightness;
+  if(st.inBand && b>0){
+    const grad=ctx.createRadialGradient(cx,cy,4,cx,cy,R*3.4);
+    grad.addColorStop(0,`rgba(255,224,138,${0.10+0.45*b})`); grad.addColorStop(1,"rgba(255,224,138,0)");
+    ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(cx,cy,R*3.4,0,7); ctx.fill();
+  }
+  ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.strokeStyle="#ffffff22";ctx.lineWidth=12;ctx.stroke();
+  const col=st.inBand?(st.feedback===FB.JITTER?"#ffb84d":"#5dff9b"):"#ff5d78";
+  ctx.beginPath();ctx.arc(cx,cy,R,-Math.PI/2,-Math.PI/2+st.progress*2*Math.PI);ctx.strokeStyle=col;ctx.lineWidth=12;ctx.lineCap="round";ctx.stroke();
+  ctx.fillStyle="#fff";ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="900 34px sans-serif";ctx.fillText(st.holdTime.toFixed(1)+"s",cx,cy-6);
+  ctx.font="600 13px sans-serif";ctx.fillStyle="#93a0c8";ctx.fillText("of "+cfg.holdSecs+"s",cx,cy+22);
+  // brightness bar
+  const bw=110, bx=cx-bw/2, by=cy+R+16;
+  ctx.fillStyle="#ffffff22";ctx.fillRect(bx,by,bw,6);
+  ctx.fillStyle="#ffe08a";ctx.fillRect(bx,by,bw*b,6);
+  ctx.fillStyle="#ffe08a";ctx.font="700 11px sans-serif";ctx.fillText("beam "+Math.round(b*100)+"%",cx,by+18);
+}
+// ── animated harbor scene (ships guided home while you hold the light) ──
+function drawHarbor(st,now){
+  const W=canvas.width, H=canvas.height, seaY=H*0.80;
+  ctx.save();
+  // twinkling stars up top (subtle, keeps the body visible)
+  for(let i=0;i<24;i++){ const sx=(i*89.7)%W, sy=(i*47.3)%(H*0.32);
+    ctx.globalAlpha=0.2+0.35*Math.abs(Math.sin(i+now/900)); ctx.fillStyle="#ffffff"; ctx.fillRect(sx,sy,2,2); }
+  ctx.globalAlpha=1;
+  // sea
+  const g=ctx.createLinearGradient(0,seaY,0,H); g.addColorStop(0,"rgba(18,56,106,0.55)"); g.addColorStop(1,"rgba(10,30,68,0.85)");
+  ctx.fillStyle=g; ctx.fillRect(0,seaY,W,H-seaY);
+  // waves
+  ctx.strokeStyle="rgba(55,225,255,0.33)"; ctx.lineWidth=2;
+  for(let k=0;k<3;k++){ ctx.beginPath(); const yy=seaY+10+k*15;
+    for(let x=0;x<=W;x+=14){ const y=yy+Math.sin(x/40+now/500+k)*4; x?ctx.lineTo(x,y):ctx.moveTo(x,y); } ctx.stroke(); }
+  const lx=W*0.13;
+  // active ship sails toward the harbour; progress = hold progress
+  const shipX=W*0.92-(W*0.92-lx-30)*st.progress, bob=Math.sin(now/300)*3+(st.inBand?0:6);
+  drawShip(shipX, seaY+24+bob, st.inBand?1:0.5, false);
+  for(let i=0;i<Math.min(shipsHome,6);i++) drawShip(lx+34+i*20, seaY+30, 0.75, true);   // docked fleet
+  drawLighthouse2(lx, seaY, st.brightness, now);
+  // particles
+  for(const p of harborParts){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.06; p.life-=0.025;
+    if(p.life>0){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,7); ctx.fill(); } }
+  ctx.globalAlpha=1; harborParts=harborParts.filter(p=>p.life>0);
+  ctx.restore();
+}
+function drawLighthouse2(x,baseY,bright,now){
+  ctx.save(); ctx.translate(x,baseY);
+  if(bright>0){ ctx.save(); ctx.translate(0,-62); ctx.rotate(Math.sin(now/700)*0.5);
+    const bg=ctx.createLinearGradient(0,0,0,-170); bg.addColorStop(0,`rgba(255,224,138,${0.32*bright})`); bg.addColorStop(1,"rgba(255,224,138,0)");
+    ctx.fillStyle=bg; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-42,-170); ctx.lineTo(42,-170); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  ctx.fillStyle="#e9eefc"; ctx.beginPath(); ctx.moveTo(-13,0); ctx.lineTo(-9,-58); ctx.lineTo(9,-58); ctx.lineTo(13,0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle="rgba(255,93,120,0.5)"; ctx.fillRect(-11,-16,22,7); ctx.fillRect(-10,-36,20,7);
+  ctx.fillStyle="#ffe08a"; ctx.beginPath(); ctx.arc(0,-64,7,0,7); ctx.fill();
+  const lg=ctx.createRadialGradient(0,-64,2,0,-64,24+18*bright); lg.addColorStop(0,`rgba(255,224,138,${0.5+0.4*bright})`); lg.addColorStop(1,"rgba(255,224,138,0)");
+  ctx.fillStyle=lg; ctx.beginPath(); ctx.arc(0,-64,24+18*bright,0,7); ctx.fill();
+  ctx.restore();
+}
+function drawShip(x,y,alpha,docked){
+  ctx.save(); ctx.globalAlpha=alpha; ctx.translate(x,y);
+  ctx.fillStyle="#24406e"; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.lineTo(8,7); ctx.lineTo(-8,7); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle="#93a0c8"; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-14); ctx.stroke();
+  ctx.fillStyle=docked?"#5dff9b":"#ffe08a"; ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(0,-3); ctx.lineTo(9,-8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function harborBurst(){ const x=canvas.width*0.13, y=canvas.height*0.80-18;
+  for(let i=0;i<18;i++) harborParts.push({x,y,vx:(Math.random()-0.5)*5,vy:-Math.random()*5-1,life:1,c:Math.random()<0.5?"#ffe08a":"#5dff9b"}); }
+function drawBandGauge(val,st){
+  const isSway=curBeacon().unit==="sway";
+  const lo=Math.max(isSway?0:0, cfg.target-cfg.band*2.5), hi=cfg.target+cfg.band*2.5;
+  const x=26, top=canvas.height*0.30, h=canvas.height*0.40;
+  const yOf=a=>top+h*(1-(Math.max(lo,Math.min(hi,a))-lo)/Math.max(hi-lo,1e-6));
+  ctx.fillStyle="#ffffff14";ctx.fillRect(x-10,top,20,h);
+  const yb1=yOf(cfg.target+cfg.band), yb2=yOf(cfg.target-cfg.band);
+  ctx.fillStyle="#5dff9b44";ctx.fillRect(x-10,yb1,20,yb2-yb1);ctx.strokeStyle="#5dff9b";ctx.lineWidth=1;ctx.strokeRect(x-10,yb1,20,yb2-yb1);
+  const yt=yOf(cfg.target);ctx.strokeStyle="#5dff9b";ctx.beginPath();ctx.moveTo(x-14,yt);ctx.lineTo(x+14,yt);ctx.stroke();
+  if(val!=null){const y=yOf(val);ctx.fillStyle=st&&st.inBand?"#5dff9b":"#ff5d78";
+    ctx.beginPath();ctx.moveTo(x+12,y);ctx.lineTo(x+24,y-6);ctx.lineTo(x+24,y+6);ctx.fill();
+    ctx.fillStyle="#fff";ctx.font="700 13px sans-serif";ctx.textAlign="left";ctx.textBaseline="middle";
+    ctx.fillText(Math.round(val)+unitSuffix(),x+28,y);}
+}
+function drawCenter(text,col){ctx.font="bold 16px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+  const w=ctx.measureText(text).width;ctx.fillStyle="#000a";ctx.fillRect(canvas.width/2-w/2-10,canvas.height/2-16,w+20,32);
+  ctx.fillStyle=col;ctx.fillText(text,canvas.width/2,canvas.height/2);}
+function setFeedback(st){
+  const c=curBeacon().cues;
+  const MAP={[FB.NO_TRACK]:["Step into frame","#ffb84d"],[FB.BELOW]:[c.below,"#37e1ff"],[FB.ABOVE]:[c.above,"#ffb84d"],
+    [FB.JITTER]:["Too much shake — steady","#ffb84d"],[FB.GOOD]:["Hold steady — lit!","#5dff9b"],[FB.POSTURE]:[c.posture,"#ffb84d"]};
+  const el=$("fb"); const [msg,col]=MAP[st.feedback]||["",""]; el.style.display="block"; el.textContent=msg; el.style.color=col;
+  el.style.borderColor=st.inBand?"#5dff9b66":"var(--line)";
+  if(st.feedback===FB.GOOD||st.feedback===FB.JITTER||st.feedback===FB.POSTURE) speak(msg);
+}
+function updateHud(st){ $("hBeacon").textContent=curBeacon().beacon.split(" ")[0]; $("hHold").textContent=st.holdTime.toFixed(1)+"s";
+  $("hSet").textContent=(setIdx+1)+"/"+cfg.sets; $("hScore").textContent=totalScore; }
+
+// ── session flow ──
+function applyBeaconConfig(id){ curBeaconId=id; const b=BEACONS[id];
+  cfg.target=b.target; cfg.band=b.band; cfg.holdSecs=b.holdSecs; cfg.sets=(+$("cSets").value)||b.sets; cfg.restSecs=b.restSecs;
+  det.configure(cfg); $("calMsg").innerHTML=b.calMsg; $("calLabel").textContent="LIVE "+(b.unit==="sway"?"SWAY":"READING"); }
+function beginQueue(ids){
+  queue=ids; qi=0; setIdx=0; totalScore=0; setResults=[]; session=[]; painPost=null; shipsHome=0; harborParts=[];
+  applyBeaconConfig(queue[0]);
+  showScreen(""); hudOn(true); phase="countdown"; countUntil=performance.now()+3000;
+}
+function enterHold(now){ phase="holding"; det.reset();
+  holdBaseline = curBeacon().needsBaseline ? lastHipC : null;   // capture sway origin
+  holdStart=now; lastBreathAt=now; speak(curBeacon().exercise+". Hold steady"); }
+function endSet(){
+  const r=det.score(); r.beacon=curBeaconId; r.set=setIdx+1; totalScore+=r.points; setResults.push(r);
+  $("hScore").textContent=totalScore; setIdx++; $("fb").style.display="none";
+  if(setIdx>=cfg.sets){                    // beacon finished
+    qi++;
+    if(qi>=queue.length){ finishSession(); return; }
+    applyBeaconConfig(queue[qi]); setIdx=0;
+    phase="rest"; restUntil=performance.now()+cfg.restSecs*1000; speak("Beacon restored. Next beacon coming up");
+  } else { phase="rest"; restUntil=performance.now()+cfg.restSecs*1000; }
+}
+function finishSession(){ phase="done"; hudOn(false); painTarget="post"; openPain(); }
+
+// ── pain check ──
+function buildPainScale(){ const p=$("painScale"); p.innerHTML="";
+  for(let i=0;i<=10;i++){ const b=document.createElement("b"); b.textContent=i; b.onclick=()=>{
+    p.querySelectorAll("b").forEach(x=>x.classList.remove("sel")); b.classList.add("sel");
+    const v=i; if(painTarget==="pre")painPre=v; else painPost=v;
+    $("painWarn").style.visibility = v>4 ? "visible":"hidden";
+  }; p.appendChild(b);} }
+function openPain(){ $("painScale").querySelectorAll("b").forEach(x=>x.classList.remove("sel")); $("painWarn").style.visibility="hidden";
+  if(painTarget==="pre"){ $("painTitle").textContent="Pain check — before"; $("painMsg").textContent="How is your knee pain right now? (0 = none, 10 = worst)"; }
+  else { $("painTitle").textContent="Pain check — after"; $("painMsg").textContent="How is your pain now, after the watch?"; }
+  showScreen("pain");
+}
+$("btnPainNext").onclick=()=>{
+  if(painTarget==="pre"){ painTarget="hold"; showScreen("calib"); phase="calibrate"; }
+  else { saveAndShowResults(); }
+};
+
+// ── results + save ──
+function saveAndShowResults(){
+  // aggregate per beacon
+  const byB={};
+  for(const r of setResults){ (byB[r.beacon]=byB[r.beacon]||[]).push(r); }
+  const beacons=Object.keys(byB).map(id=>{
+    const rs=byB[id]; const inBand=rs.reduce((a,b)=>a+b.timeInBand,0); const best=rs.reduce((a,b)=>Math.max(a,b.peakHold),0);
+    const stars=Math.round(rs.reduce((a,b)=>a+b.stars,0)/rs.length); const pts=rs.reduce((a,b)=>a+b.points,0);
+    return {id, name:BEACONS[id].beacon, sets:rs.length, inBandSec:+inBand.toFixed(1), bestHold:+best.toFixed(1), stars, points:pts,
+            cleared: rs.some(r=>r.success)}; });
+  const totInBand=beacons.reduce((a,b)=>a+b.inBandSec,0);
+  const bestHold=beacons.reduce((a,b)=>Math.max(a,b.bestHold),0);
+  const avgStars=beacons.length?Math.round(beacons.reduce((a,b)=>a+b.stars,0)/beacons.length):0;
+  saveSession({date:new Date().toISOString(), game:"steadfast", mode:queue.length>1?"watch":"beacon",
+    painPre, painPost, totalScore, stars:avgStars, bestHold, totalInBand:+totInBand.toFixed(1), beacons});
+  let rows=beacons.map(b=>`<tr><td>${BEACON_ICON[b.id]||""} ${b.name.split(" ")[0]}</td><td>${b.bestHold}s</td><td>${b.inBandSec}s</td>
+    <td class="stars">${"★".repeat(b.stars)}</td><td>${b.points}</td></tr>`).join("");
+  $("resBody").innerHTML=`
+    <div style="text-align:center;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--muted)">SHIPS GUIDED HOME</div>
+      <div style="font-size:40px;font-weight:800;color:var(--cyan)">${totalScore}</div>
+      <div class="stars">${"★".repeat(avgStars)}${"☆".repeat(3-avgStars)}</div></div>
+    <table><tr><th>Beacon</th><th>Best</th><th>In-band</th><th>Stars</th><th>Ships</th></tr>${rows}</table>
+    <p style="margin-top:8px;font-size:12px;color:var(--muted)">Pain ${painPre??"–"} → ${painPost??"–"} · best hold ${bestHold.toFixed(1)}s · total time-under-tension ${totInBand.toFixed(1)}s</p>`;
+  showScreen("results");
+}
+
+// ── coast map / progress ──
+function renderProgress(){
+  const all=loadSessions(); const s=summarize(all);
+  const cleared=new Set(); for(const ses of all){ (ses.beacons||[]).forEach(b=>{ if(b.cleared)cleared.add(b.id); }); }
+  $("coast").innerHTML=MVP_BEACONS.map(id=>`<div class="lamp ${cleared.has(id)?"lit":""}"><div class="ic">${BEACON_ICON[id]}</div><div class="nm">${BEACONS[id].beacon}</div></div>`).join("");
+  $("progTiles").innerHTML=`
+    <div class="tile"><div class="tv">${s.count}</div><div class="tl">watches</div></div>
+    <div class="tile"><div class="tv">${s.thisWeek}</div><div class="tl">this week</div></div>
+    <div class="tile"><div class="tv">${s.bestHold.toFixed(0)}s</div><div class="tl">best hold</div></div>
+    <div class="tile"><div class="tv">${s.streak}</div><div class="tl">day streak</div></div>`;
+  if(!all.length){ $("progBody").innerHTML='<p style="color:var(--muted)">No watches yet — complete one and it appears here.</p>'; return; }
+  const recent=all.slice(-8).reverse();
+  const rows=recent.map(r=>{const d=new Date(r.date);
+    return `<tr><td>${d.toLocaleDateString()} ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td>
+      <td>${r.mode==="watch"?"Full watch":(r.beacons&&r.beacons[0]?r.beacons[0].name.split(" ")[0]:"—")}</td>
+      <td>${(r.bestHold||0).toFixed(0)}s</td><td>${r.totalScore||0}</td><td class="stars">${"★".repeat(r.stars||0)}</td></tr>`;}).join("");
+  $("progBody").innerHTML=`<table><tr><th>When</th><th>Watch</th><th>Best</th><th>Ships</th><th></th></tr>${rows}</table>`;
+}
+
+// ── export ──
+function exportCSV(){const lines=["time_s,beacon,set,value,in_band"];for(const s of session)lines.push(`${s.t},${s.beacon},${s.set},${s.value??""},${s.inBand?1:0}`);
+  download("steadfast_"+Date.now()+".csv","text/csv",lines.join("\n"));}
+function exportJSON(){download("steadfast_"+Date.now()+".json","application/json",
+  JSON.stringify({recordedAt:new Date().toISOString(),game:"steadfast",queue,painPre,painPost,totalScore,sets:setResults,samples:session},null,1));}
+function download(name,type,data){const b=new Blob([data],{type}),u=URL.createObjectURL(b);
+  const a=document.createElement("a");a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+
+// ── controls ──
+async function startFlow(ids){
+  $("btnStart").style.display="none";$("btnWatch").style.display="none";$("spin").style.display="block";
+  try{ if(!landmarker)await loadModel(); $("loadmsg").textContent="Starting camera…"; await startCamera();
+    running=true; loop();
+    queue=ids; painTarget="pre"; openPain();
+    // stash queue to begin after calibration
+    pendingQueue=ids;
+  }catch(e){ $("spin").style.display="none";$("btnStart").style.display="";$("btnWatch").style.display="";$("loadmsg").textContent="Error: "+(e.message||e); }
+}
+let pendingQueue=["harbor"];
+$("btnStart").onclick=()=>startFlow([curBeaconId]);
+$("btnWatch").onclick=()=>startFlow([...MVP_BEACONS]);
+$("btnSetZero").onclick=()=>{const d=meter.calibrate(lastMeasured);toast(d&&d.length?("Zeroed "+d.join(" & ")):"Straighten leg in view, then tap");};
+$("btnBegin").onclick=()=>beginQueue(pendingQueue);
+$("btnBackMenu").onclick=()=>{ phase="menu"; showScreen("menu"); $("btnStart").style.display="";$("btnWatch").style.display="";$("spin").style.display="none"; };
+$("btnStop").onclick=()=>{ if(phase==="holding") endSet(); };
+$("btnCal2").onclick=()=>{ meter.calibrate(lastMeasured); toast("Re-zeroed"); };
+$("btnSwitch").onclick=switchCamera; $("btnSwitch2").onclick=switchCamera;
+$("btnMirror").onclick=toggleMirror; $("btnMirror2").onclick=toggleMirror;
+function toggleVoice(){ voiceOn=!voiceOn; $("lnkVoice").textContent="🔊 Voice: "+(voiceOn?"on":"off"); toast("Voice "+(voiceOn?"on":"off")); if(!voiceOn&&"speechSynthesis"in window)speechSynthesis.cancel(); }
+$("btnVoice2").onclick=toggleVoice; $("lnkVoice").onclick=toggleVoice;
+$("btnCsv").onclick=exportCSV; $("btnJson").onclick=exportJSON;
+$("btnMap").onclick=()=>{ renderProgress(); showScreen("progress"); };
+$("btnAgain").onclick=()=>{ phase="menu"; hudOn(false); showScreen("menu"); $("btnStart").style.display="";$("btnWatch").style.display="";$("spin").style.display="none"; };
+$("lnkProgress").onclick=()=>{ renderProgress(); showScreen("progress"); };
+$("btnProgBack").onclick=()=>showScreen("menu");
+$("btnClearHist").onclick=()=>{ if(confirm("Clear all saved watches?")){ clearSessions(); renderProgress(); } };
+
+buildBeaconGrid(); buildPainScale(); selectBeacon("harbor");
+if(!window.isSecureContext && location.hostname!=="localhost"){ $("loadmsg").textContent="⚠ Open over HTTPS (e.g. GitHub Pages) for camera access."; }
+</script>
+</body>
+</html>

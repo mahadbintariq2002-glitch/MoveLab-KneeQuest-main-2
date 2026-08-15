@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0e24" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Crystal Guardian — MoveLab</title>
+<style>
+  :root{ --bg:#0a0e24; --panel:rgba(18,22,54,.9); --line:#2c3670; --txt:#eef2ff; --muted:#9aa6d4;
+    --cyan:#37e1ff; --amber:#ffb84d; --green:#8affc0; --pink:#ff6fae; --gold:#ffe08a; --r:18px; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden;overscroll-behavior:none}
+  #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;z-index:0}
+
+  /* animated menu backdrop */
+  .screen{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;padding:24px;text-align:center;overflow:auto;
+    background:linear-gradient(135deg,#141a44,#25184f 55%,#4a1f5e);}
+  .screen.on{display:flex;animation:fade .4s ease}
+  .screen::before{content:"";position:fixed;inset:-20%;z-index:-1;background:
+    radial-gradient(circle at 20% 20%, #37e1ff22, transparent 40%),
+    radial-gradient(circle at 80% 30%, #ff6fae22, transparent 40%),
+    radial-gradient(circle at 50% 90%, #8affc022, transparent 45%);animation:drift 14s ease-in-out infinite alternate}
+  @keyframes drift{to{transform:translate(-4%,-3%) scale(1.08)}}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes pop{0%{transform:scale(0) rotate(-40deg);opacity:0}70%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
+  @keyframes floaty{to{transform:translateY(-10px)}}
+
+  h1{margin:0;font-size:clamp(30px,8vw,52px);font-weight:900;letter-spacing:1px;
+    background:linear-gradient(90deg,var(--gold),var(--cyan),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 4px 20px #37e1ff55)}
+  h2{margin:0;font-size:clamp(20px,5vw,30px);font-weight:800}
+  p.sub{color:var(--muted);font-size:16px;max-width:460px;line-height:1.5;margin:0}
+  .hero{font-size:80px;animation:floaty 2.6s ease-in-out infinite alternate;filter:drop-shadow(0 0 24px #37e1ff88)}
+
+  .btn{border:none;border-radius:var(--r);padding:16px 30px;font-size:19px;font-weight:800;cursor:pointer;color:#04122a;
+    background:linear-gradient(180deg,#8becff,#37e1ff);box-shadow:0 8px 22px #37e1ff44, inset 0 -3px 0 #0af3;display:inline-flex;gap:10px;align-items:center;justify-content:center;
+    transition:transform .1s, box-shadow .2s; min-width:180px; min-height:58px}
+  .btn:active{transform:translateY(2px) scale(.98)}
+  .btn.big{font-size:22px;padding:20px 40px}
+  .btn.gold{background:linear-gradient(180deg,#ffe9a8,#ffc24d);box-shadow:0 8px 22px #ffb84d55, inset 0 -3px 0 #a705}
+  .btn.ghost{background:rgba(255,255,255,.08);color:var(--txt);box-shadow:none;border:1px solid var(--line);font-weight:700;min-width:120px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:center}
+
+  .topchips{position:fixed;top:0;left:0;right:0;z-index:12;display:flex;gap:8px;justify-content:center;padding:max(10px,env(safe-area-inset-top)) 10px 8px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:15px;font-weight:800;backdrop-filter:blur(6px)}
+
+  /* pick grids (characters / difficulty / levels) */
+  .grid{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;max-width:560px}
+  .pick{background:var(--panel);border:2px solid var(--line);border-radius:var(--r);padding:16px;cursor:pointer;color:var(--txt);
+    width:150px;text-align:center;transition:transform .12s,border-color .2s;animation:pop .4s backwards}
+  .pick:hover{transform:translateY(-3px)} .pick.sel{border-color:var(--gold);box-shadow:0 0 0 3px #ffe08a44, 0 10px 24px #0006}
+  .pick .emoji{font-size:52px;line-height:1} .pick .pn{font-size:18px;font-weight:800;margin-top:6px}
+  .pick .pd{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.35}
+  .pick.lvl{width:170px} .pick.lvl .stars{color:var(--gold);font-size:16px;margin-top:6px} .pick.locked{opacity:.55}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;max-width:460px;width:100%}
+
+  /* HUD (in-game) */
+  #hud{position:fixed;inset:0;z-index:8;display:none;pointer-events:none}
+  #hud.on{display:block}
+  #hudTop{position:absolute;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;padding:max(10px,env(safe-area-inset-top)) 12px 8px}
+  #hudTop .lbl{font-size:14px;font-weight:800;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:6px 12px}
+  .bar{flex:1;height:14px;border-radius:8px;background:#ffffff1c;overflow:hidden;border:1px solid var(--line)}
+  .bar > i{display:block;height:100%;border-radius:8px;transition:width .12s}
+  #hpBar{background:linear-gradient(90deg,#ff6f6f,#ffb84d,#8affc0)} #novaBar{background:linear-gradient(90deg,#ffe08a,#fff)}
+  #btnPause{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;pointer-events:auto}
+  #fbBanner{position:absolute;left:50%;bottom:11%;transform:translateX(-50%);font-size:18px;font-weight:800;
+    background:#000a;border:1px solid var(--line);border-radius:22px;padding:9px 20px;opacity:0;transition:opacity .2s;text-align:center;max-width:90vw}
+  #novaWrap{position:absolute;left:12px;right:12px;bottom:calc(11% + 44px);display:flex;gap:8px;align-items:center;font-size:12px;color:var(--gold);font-weight:800}
+
+  /* camera PIP */
+  #pipWrap{position:fixed;right:8px;bottom:8px;width:132px;height:99px;z-index:9;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#000;display:none}
+  #pipWrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover} #pip{position:absolute;inset:0;width:100%;height:100%}
+  #pipAngle{position:absolute;left:6px;bottom:4px;font-size:12px;font-weight:800;color:var(--gold);text-shadow:0 1px 3px #000}
+
+  #countbig{position:fixed;inset:0;z-index:11;display:none;align-items:center;justify-content:center;font-size:130px;font-weight:900;color:var(--gold);text-shadow:0 0 40px #ffe08a;pointer-events:none}
+
+  /* complete screen */
+  .bigstar{font-size:56px;color:#3a3f66;display:inline-block;margin:0 4px}
+  .bigstar.lit{color:var(--gold);text-shadow:0 0 18px #ffe08a;animation:pop .5s backwards}
+  #cStats{width:100%;max-width:360px}
+  .crow{display:flex;justify-content:space-between;padding:7px 4px;border-bottom:1px solid #ffffff14;font-size:15px}
+  .crow b{font-weight:800} .crow.xp b{color:var(--cyan)} .crow.coin b{color:var(--gold)}
+  #cAch{color:var(--gold);font-weight:800;min-height:20px}
+
+  /* dashboard */
+  .tiles{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:460px}
+  .tile{flex:1;min-width:96px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
+  .tile .tv{font-size:24px;font-weight:900;color:var(--cyan)} .tile .tl{font-size:11px;color:var(--muted)}
+  #dChart{width:100%;height:120px;display:block}
+  .achgrid{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .ach{width:130px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;opacity:.4}
+  .ach.got{opacity:1;border-color:var(--gold)} .ach .ae{font-size:26px} .ach .an{font-size:13px;font-weight:800} .ach .ad{font-size:11px;color:var(--muted)}
+
+  .toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%);z-index:40;background:#000d;border:1px solid var(--line);
+    border-radius:20px;padding:10px 18px;font-size:14px;opacity:0;transition:opacity .3s;text-align:center;max-width:90vw}
+  .spinner{width:36px;height:36px;border:3px solid #ffffff20;border-top-color:var(--cyan);border-radius:50%;animation:spin 1s linear infinite;display:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .zone{font-size:15px;font-weight:800;min-height:22px}
+  .steps small{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<div id="pipWrap"><video id="video" playsinline autoplay muted></video><canvas id="pip"></canvas><div id="pipAngle">—</div></div>
+
+<!-- HOME -->
+<section class="screen" id="home">
+  <div class="topchips">
+    <span class="chip" id="coinN">0</span><span class="chip" id="rankN">Lv 1</span><span class="chip" id="streakN">🔥 0</span>
+    <span class="chip" id="btnMute" style="cursor:pointer">🔊</span>
+  </div>
+  <div class="hero">🔮</div>
+  <h1>CRYSTAL GUARDIAN</h1>
+  <p class="sub" id="homeSub">Hold the light. Guard the crystal.</p>
+  <p class="sub">Hold your knee at the target to raise a shield of light and protect the world-crystal from the shadow-wisps. The steadier you hold, the stronger you grow.</p>
+  <div class="row">
+    <button class="btn big gold" id="btnPlay">▶ Play</button>
+    <button class="btn ghost" id="btnDash">📊 Progress</button>
+  </div>
+  <div class="row" style="margin-top:6px;font-size:13px">
+    <a href="okc.html" style="color:var(--muted);text-decoration:none">🦵 OKC Games</a>
+    <a href="play.html" style="color:var(--muted);text-decoration:none">🎈 Sky Trail</a>
+    <a href="game.html" style="color:var(--muted);text-decoration:none">🏮 STEADFAST</a>
+    <a href="index.html" style="color:var(--muted);text-decoration:none">📈 Tracker</a>
+  </div>
+</section>
+
+<!-- CHARACTER SELECT -->
+<section class="screen" id="charsel">
+  <h2>Choose your Guardian</h2>
+  <div class="grid" id="charGrid"></div>
+  <div class="row"><button class="btn" id="btnCharNext">Next →</button><button class="btn ghost" id="btnCharBack">← Back</button></div>
+</section>
+
+<!-- DIFFICULTY + LEVEL -->
+<section class="screen" id="diffsel">
+  <h2>Difficulty</h2>
+  <div class="grid" id="diffGrid"></div>
+  <h2 style="margin-top:8px">Mission</h2>
+  <div class="grid" id="levelRow"></div>
+  <div class="row"><button class="btn big gold" id="btnDiffNext">Start ▶</button><button class="btn ghost" id="btnDiffBack">← Back</button></div>
+</section>
+
+<!-- TUTORIAL -->
+<section class="screen" id="tutorial">
+  <h2>How to play</h2>
+  <div class="card" style="text-align:left;font-size:16px;line-height:1.7">
+    🦵 <b>Move your knee</b> to the glowing target angle.<br>
+    🛡️ <b>Hold it steady</b> — that raises your <b>shield of light</b>.<br>
+    ✨ Wisps that touch your shield burst into stars.<br>
+    💥 Keep holding to charge a <b>Nova</b> that clears the screen.<br>
+    ❤️ Don’t let wisps reach the crystal!<br>
+    <small style="color:var(--muted)">Tip: no camera? You can preview with your mouse first.</small>
+  </div>
+  <button class="btn big gold" id="btnTutNext">Got it! ▶</button>
+</section>
+
+<!-- CALIBRATE / CONTROL CHOICE -->
+<section class="screen" id="calib">
+  <h2>Get ready</h2>
+  <div class="row" id="calCamRow">
+    <button class="btn big gold" id="calCam">📷 Play with camera</button>
+    <button class="btn" id="calMouse">🖱 Preview with mouse</button>
+  </div>
+  <div class="spinner" id="spin"></div>
+  <p class="sub" id="calHint"></p>
+  <div class="steps" id="calSteps" style="display:none;width:100%;max-width:460px">
+    <div class="card" style="text-align:center">
+      <div style="color:var(--muted);font-size:13px">YOUR KNEE</div>
+      <div id="calNow" style="font-size:44px;font-weight:900;color:var(--cyan)">—</div>
+      <div class="zone" id="calZone">Sit side-on, whole leg visible</div>
+    </div>
+    <p class="sub">1) Straighten your leg and tap <b>Set 0°</b>. &nbsp; 2) Bend to the zone and hold. &nbsp; 3) <b>Fly!</b></p>
+    <div class="row"><button class="btn ghost" id="calSet">🎯 Set 0°</button><button class="btn big gold" id="calGo">▶ Start</button></div>
+  </div>
+</section>
+
+<!-- IN-GAME HUD -->
+<div id="hud">
+  <div id="hudTop">
+    <span class="lbl" id="waveTxt">Wave 1/3</span>
+    <span class="lbl">❤️</span><div class="bar"><i id="hpBar" style="width:100%"></i></div>
+  </div>
+  <div id="novaWrap">💥 NOVA <div class="bar" style="height:10px"><i id="novaBar" style="width:0"></i></div></div>
+  <button class="btn ghost" id="btnPause">⏸</button>
+  <div id="fbBanner"></div>
+</div>
+<div id="countbig"></div>
+
+<!-- LEVEL COMPLETE -->
+<section class="screen" id="complete">
+  <h1 id="cTitle" style="font-size:34px">Mission Complete!</h1>
+  <div id="cStars"></div>
+  <div class="card"><div id="cStats"></div></div>
+  <div id="cAch"></div>
+  <div class="row">
+    <button class="btn gold" id="btnNext">Next mission ▶</button>
+    <button class="btn" id="btnReplay">↻ Replay</button>
+    <button class="btn ghost" id="btnCompHome">Home</button>
+  </div>
+</section>
+
+<!-- DASHBOARD -->
+<section class="screen" id="dashboard">
+  <h2>📊 Your Progress</h2>
+  <div class="tiles" id="dTiles"></div>
+  <div class="card" style="max-width:460px">
+    <div style="font-size:12px;color:var(--muted)" id="dProgTxt">XP</div>
+    <div class="bar" style="margin-top:6px"><i id="dProg" style="width:0;background:linear-gradient(90deg,#37e1ff,#8affc0)"></i></div>
+    <canvas id="dChart"></canvas>
+  </div>
+  <div class="achgrid" id="dAch"></div>
+  <button class="btn gold" id="btnDashBack">← Home</button>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="js/arcade/main.js"></script>
+</body>
+</html>

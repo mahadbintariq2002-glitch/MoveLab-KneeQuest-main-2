@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0b1030" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Sky Trail — MoveLab</title>
+<style>
+  :root{ --bg:#0b1030; --panel:rgba(14,18,44,.86); --line:#2a3468; --txt:#eef2ff; --muted:#93a0c8;
+    --cyan:#37e1ff; --amber:#ffb84d; --green:#5dff9b; --red:#ff5d78; --beam:#ffe08a; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden;overscroll-behavior:none;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  #scene{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  /* camera PIP */
+  #pip{position:fixed;right:8px;bottom:8px;width:132px;height:99px;z-index:4;border-radius:12px;overflow:hidden;
+    border:1px solid var(--line);background:#000;display:none}
+  #pip video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #pip canvas{position:absolute;inset:0;width:100%;height:100%}
+  #pipAngle{position:absolute;left:5px;bottom:4px;font-size:11px;font-weight:800;color:var(--beam);text-shadow:0 1px 3px #000}
+
+  #topbar{position:fixed;top:0;left:0;right:0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;z-index:5;
+    padding:max(8px,env(safe-area-inset-top)) 10px 8px;background:linear-gradient(#000a,transparent);font-size:12px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:5px 10px;display:flex;gap:6px;align-items:center;backdrop-filter:blur(6px)}
+  a.back{color:var(--cyan);text-decoration:none;font-weight:600}
+  #progWrap{flex:1;min-width:110px;height:9px;background:#ffffff1c;border-radius:6px;overflow:hidden}
+  #progBar{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--beam));border-radius:6px}
+
+  #hint{position:fixed;left:50%;bottom:16%;transform:translateX(-50%);z-index:6;background:#000b;border:1px solid var(--line);
+    border-radius:22px;padding:8px 16px;font-size:15px;font-weight:700;text-align:center;display:none;backdrop-filter:blur(6px)}
+  #controls{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:10px 10px max(10px,env(safe-area-inset-bottom));
+    display:none;gap:8px;justify-content:center;flex-wrap:wrap;background:linear-gradient(transparent,#000c)}
+  button{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:11px 14px;
+    font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center;min-width:60px;justify-content:center}
+  button:active{transform:scale(.95)}
+  button.primary{background:var(--cyan);color:#00121a;border-color:transparent}
+  button.ghost{background:transparent}
+
+  .screen{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:22px;gap:12px;background:radial-gradient(circle at 50% 24%,#182052,#080b1e);overflow:auto}
+  .screen h1{margin:0;font-size:27px;letter-spacing:1px;background:linear-gradient(90deg,var(--beam),var(--cyan));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .screen .tag{color:var(--txt);font-size:14px;font-weight:600;margin:-6px 0 0}
+  .screen p{color:var(--muted);max-width:400px;line-height:1.5;font-size:13.5px;margin:0}
+  .big{font-size:16px;padding:15px 26px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;max-width:420px;width:100%;text-align:left}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:9px 0}
+  .row label{font-size:13px}.row .val{font-size:13px;color:var(--cyan);font-weight:700;min-width:54px;text-align:right}
+  input[type=range]{flex:1;accent-color:var(--cyan)}
+  #loadmsg{color:var(--cyan);font-size:13px;min-height:18px}
+  .spinner{width:34px;height:34px;border:3px solid #ffffff20;border-top-color:var(--cyan);border-radius:50%;animation:spin 1s linear infinite;display:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .safety{font-size:11.5px;color:var(--amber);max-width:400px;line-height:1.45}
+  .tiles{display:flex;gap:8px;max-width:420px;width:100%;flex-wrap:wrap}
+  .tile{flex:1;min-width:74px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px;text-align:center}
+  .tile .tv{font-size:20px;font-weight:800;color:var(--cyan)}.tile .tl{font-size:10px;color:var(--muted)}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:40;background:#000d;border:1px solid var(--line);
+    border-radius:20px;padding:8px 16px;font-size:13px;opacity:0;transition:opacity .3s;max-width:90vw;text-align:center}
+  .countbig{position:fixed;inset:0;z-index:8;display:none;align-items:center;justify-content:center;font-size:120px;font-weight:900;
+    color:var(--beam);text-shadow:0 0 30px #ffe08a88;pointer-events:none}
+  .linkrow{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:13px}
+  .linkrow a{color:var(--muted);text-decoration:none;cursor:pointer}
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div id="pip"><video id="video" playsinline autoplay muted></video><canvas id="pipcanvas"></canvas><div id="pipAngle">—</div></div>
+
+<div id="topbar">
+  <a class="back" href="game.html">← Games</a>
+  <div class="chip"><span id="modeTxt">—</span></div>
+  <div id="progWrap"><div id="progBar"></div></div>
+  <div class="chip"><span id="starTxt">★ 0</span></div>
+</div>
+
+<div id="hint"></div>
+<div class="countbig" id="countbig"></div>
+
+<div id="controls">
+  <button id="btnPause" class="ghost">⏸ Menu</button>
+  <button id="btnRecal" class="primary">🎯 Recalibrate</button>
+  <button id="btnSwitch">🔄 Cam</button>
+</div>
+
+<!-- MENU -->
+<div class="screen" id="menu">
+  <h1>SKY TRAIL</h1>
+  <div class="tag">Fly the lantern with your knee — light the way home.</div>
+  <p>Move your <b>knee</b> to fly the lantern along the glowing trail to the lighthouse.
+     <b>Slopes</b> make you move through your range; <b>flat stretches</b> ask you to hold steady.
+     Stay on the trail, gather stars, reach the goal — that’s your therapy.</p>
+  <div class="card">
+    <div class="row"><label>Trail length</label><input id="cLen" type="range" min="60" max="180" step="15" value="90"><span class="val" id="vLen">90s</span></div>
+    <div class="row"><label>Trail width (easier →)</label><input id="cWidth" type="range" min="8" max="22" step="1" value="15"><span class="val" id="vWidth">15</span></div>
+    <div class="row"><label>Speed</label><input id="cSpeed" type="range" min="6" max="16" step="1" value="10"><span class="val" id="vSpeed">10</span></div>
+  </div>
+  <p class="safety">⚠ Sit or stand safely with support in reach. Move within a comfortable, pain-free range (stop if pain &gt;4/10). Breathe throughout.</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <button id="btnCam" class="primary big">▶ Play with camera</button>
+    <button id="btnMouse" class="big">🖱 Preview with mouse</button>
+  </div>
+  <div class="linkrow"><a href="arcade.html">🔮 Crystal Guardian</a><a href="game.html">🏮 STEADFAST</a><a href="index.html">📈 Tracker</a><a id="lnkProg">🗺 Progress</a></div>
+  <div class="spinner" id="spin"></div><div id="loadmsg"></div>
+</div>
+
+<!-- CALIBRATE (camera) -->
+<div class="screen" id="calib" style="display:none">
+  <h1>Get in position</h1>
+  <!-- positioning guide -->
+  <div class="card" style="display:flex;gap:12px;align-items:center">
+    <svg width="86" height="86" viewBox="0 0 86 86" style="flex:none">
+      <rect x="1" y="1" width="84" height="84" rx="10" fill="#0e1430" stroke="#2a3468"/>
+      <!-- camera -->
+      <rect x="6" y="34" width="14" height="18" rx="3" fill="#37e1ff"/><circle cx="13" cy="43" r="4" fill="#0e1430"/>
+      <path d="M20 40 L30 43 L20 46 Z" fill="#37e1ff"/>
+      <!-- side-on figure, whole leg visible -->
+      <circle cx="58" cy="20" r="6" fill="#ffe08a"/>
+      <line x1="58" y1="26" x2="58" y2="46" stroke="#ffe08a" stroke-width="3"/>
+      <line x1="58" y1="46" x2="48" y2="62" stroke="#5dff9b" stroke-width="3"/>
+      <line x1="48" y1="62" x2="52" y2="78" stroke="#5dff9b" stroke-width="3"/>
+      <circle cx="58" cy="46" r="3" fill="#ff5d78"/><circle cx="48" cy="62" r="3" fill="#ff5d78"/><circle cx="52" cy="78" r="3" fill="#ff5d78"/>
+    </svg>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.5">
+      Sit or stand <b>side-on</b> to the camera. Prop the device so it sees your
+      <b style="color:#5dff9b">whole leg — hip → knee → ankle</b> (the pink dots). Stand back
+      ~2–3 m in good light. Watch the badge below turn <b style="color:#5dff9b">green</b>.
+    </div>
+  </div>
+  <div id="trackBadge" class="chip" style="font-size:13px;font-weight:700;color:var(--amber)">📷 Looking for your leg…</div>
+  <div class="card" style="text-align:center">
+    <div style="color:var(--muted);font-size:12px">LIVE KNEE</div>
+    <div id="calVal" style="font-size:44px;font-weight:800;color:var(--cyan)">—°</div>
+    <div id="calRange" style="color:var(--muted);font-size:12px">range —</div>
+    <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:10px">
+      <span style="font-size:11px;color:var(--muted)">DOWN</span>
+      <div id="ctrlBar" style="width:190px;height:14px;background:#ffffff1c;border-radius:8px;position:relative;flex:none">
+        <div id="ctrlDot" style="position:absolute;top:-3px;width:20px;height:20px;border-radius:50%;background:var(--beam);left:0;box-shadow:0 0 8px var(--beam)"></div>
+      </div>
+      <span style="font-size:11px;color:var(--muted)">UP</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">Move your knee — the dot should slide. Wrong way? Tap <b>Invert</b>.</div>
+  </div>
+  <p id="calMsg" style="font-size:13px">Tap <b>Learn my range</b>, then gently bend &amp; straighten your knee a few times.</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <button id="btnCalStart" class="primary big">▶ Learn my range (6s)</button>
+    <button id="btnCalGo" class="primary big" style="display:none">✓ Fly!</button>
+    <button id="btnCalSkip" class="ghost">Skip →</button>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <button id="btnInvert" class="ghost">⇅ Invert direction</button>
+    <button id="btnSwitchCal" class="ghost">🔄 Switch camera</button>
+    <button id="btnBackMenu" class="ghost">← Menu</button>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- WIN -->
+<div class="screen" id="win" style="display:none">
+  <h1 id="winTitle">You reached the lighthouse! 🗼</h1>
+  <div class="tiles" id="winTiles"></div>
+  <div class="card" id="winBody"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+    <button id="btnAgain" class="primary">↻ Play again</button>
+    <button id="btnMenu2" class="ghost">Menu</button>
+  </div>
+</div>
+
+<!-- PROGRESS -->
+<div class="screen" id="progress" style="display:none">
+  <h1>Progress</h1>
+  <div class="tiles" id="progTiles"></div>
+  <div class="card" id="progBody"></div>
+  <div style="display:flex;gap:8px;justify-content:center">
+    <button id="btnClear" class="ghost">Clear</button><button id="btnProgBack" class="primary">← Menu</button>
+  </div>
+</div>
+
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
+import { OneEuro, detectView, KneeMeter, KNEES, vis, VIS_DRAW } from "./js/core.js";
+import { loadSessions, saveSession, clearSessions, summarize } from "./js/storage.js";
+
+const POSE_MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/wasm";
+const CONNECTIONS=PoseLandmarker.POSE_CONNECTIONS;
+const $=id=>document.getElementById(id);
+const scene=$("scene"), sctx=scene.getContext("2d");
+const video=$("video"), pcv=$("pipcanvas"), pctx=pcv.getContext("2d");
+
+// ── config ──
+const cfg={ lenSec:90, width:15, speed:10 };
+[["cLen","vLen","lenSec","s"],["cWidth","vWidth","width",""],["cSpeed","vSpeed","speed",""]].forEach(([id,vid,key,suf])=>{
+  const el=$(id), upd=()=>{cfg[key]=+el.value; $(vid).textContent=el.value+suf;}; el.addEventListener("input",upd); upd();
+});
+
+// ── state ──
+let mode="mouse", phase="menu";                 // menu|calib|warmup|countdown|play|win
+let W=0,H=0,DPR=1, playTop=0, playH=0;
+let controlNorm=0.5, pointerNorm=0.5;
+let worldX=0, totalLen=90, stars=[], particles=[], clouds=[], hillSeed=Math.random()*1000;
+let path=[], pathTotal=0, halfW=0.11, speed=10;
+let starsGot=0, score=0, reps=0, inChanSec=0, elapsed=0, lastTs=0;
+let repPhase="mid", romLoObs=1, romHiObs=0;
+let running=false, rafId=0, camActive=false;   // running = game loop; camActive = pose loop
+// camera
+let landmarker=null, stream=null, facing="user", camDevices=[], camIdx=0;
+let lastVideoTime=-1, lastRes=null;
+const fX=[],fY=[]; for(let i=0;i<33;i++){fX[i]=new OneEuro();fY[i]=new OneEuro();}
+const meter=new KneeMeter();
+let flex=null, flexConf=0, invert=false, flexSmooth=new OneEuro(1.5,0.4), calLo=0, calHi=160, warmMin=999, warmMax=-999, warmUntil=0;
+
+function toast(m){const t=$("toast");if(!t)return;t.textContent=m;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1800);}
+function showScreen(id){for(const s of ["menu","calib","win","progress"])$(s).style.display=(s===id)?"flex":"none";}
+function hudOn(on){$("controls").style.display=on?"flex":"none";}
+
+// ── canvas sizing ──
+function resize(){ DPR=Math.min(window.devicePixelRatio||1,2); W=window.innerWidth; H=window.innerHeight;
+  scene.width=W*DPR; scene.height=H*DPR; scene.style.width=W+"px"; scene.style.height=H+"px"; sctx.setTransform(DPR,0,0,DPR,0,0);
+  playTop=Math.round(H*0.12); playH=Math.round(H*0.74);
+  pcv.width=132; pcv.height=99;
+}
+window.addEventListener("resize",resize); window.addEventListener("orientationchange",()=>setTimeout(resize,200));
+
+// ── level / path ──
+// path = list of {d0,d1,c0,c1}; center interpolates c0..c1 over world-units d0..d1
+function buildPath(){
+  const flats=[0.5,0.85,0.2,0.6,0.9,0.15,0.55,0.8,0.25,0.5];  // alternating hold heights
+  const segs=[]; let d=0, prev=0.5, i=0;
+  segs.push({t:"ramp",len:1.5,c0:0.5,c1:0.5});                 // ease-in
+  while(d< totalLen-6){
+    const c=flats[i%flats.length]; i++;
+    segs.push({t:"ramp",len:2.2,c0:prev,c1:c});                // move to next height (dynamic ROM)
+    segs.push({t:"flat",len:2.6,c0:c,c1:c});                   // hold at height (isometric)
+    prev=c; d+= (2.2+2.6);
+  }
+  segs.push({t:"ramp",len:2,c0:prev,c1:0.5}); segs.push({t:"flat",len:3,c0:0.5,c1:0.5});
+  path=[]; let acc=0;
+  for(const s of segs){ path.push({d0:acc,d1:acc+s.len,c0:s.c0,c1:s.c1}); acc+=s.len; }
+  pathTotal=acc;
+}
+function pathCenterAt(d){
+  if(d<=0) return path[0].c0; if(d>=pathTotal) return path[path.length-1].c1;
+  // linear scan (path is short)
+  for(const s of path){ if(d>=s.d0 && d<=s.d1){ const u=(d-s.d0)/Math.max(s.d1-s.d0,1e-6); return s.c0+(s.c1-s.c0)*u; } }
+  return 0.5;
+}
+
+// ── start flows ──
+async function startMouse(){
+  mode="mouse"; camActive=false; $("modeTxt").textContent="🖱 Mouse"; $("pip").style.display="none"; $("btnSwitch").style.display="none"; $("btnRecal").style.display="none";
+  beginLevel();
+}
+async function startCameraFlow(){
+  $("btnCam").style.display="none"; $("btnMouse").style.display="none"; $("spin").style.display="block";
+  try{ if(!landmarker)await loadModel(); $("loadmsg").textContent="Starting camera…"; await startCamera();
+    mode="camera"; $("modeTxt").textContent="📷 Knee"; $("pip").style.display="block"; camActive=true; poseLoop();
+    showScreen("calib"); phase="calib";
+  }catch(e){ $("spin").style.display="none"; $("btnCam").style.display=""; $("btnMouse").style.display=""; $("loadmsg").textContent="Error: "+(e.message||e); }
+}
+function beginLevel(){
+  totalLen=cfg.lenSec/3.2;               // world-units (~len in seconds at base speed)
+  speed=cfg.speed/10; halfW=cfg.width/140;
+  buildPath();
+  worldX=0; stars=[]; particles=[]; starsGot=0; score=0; reps=0; inChanSec=0; elapsed=0; repPhase="mid";
+  romLoObs=1; romHiObs=0; spawnStars();
+  clouds=Array.from({length:6},()=>({x:Math.random(),y:Math.random()*0.5,s:0.4+Math.random()*0.6}));
+  showScreen(""); hudOn(true); phase="countdown"; countUntil=performance.now()+3000; lastTs=performance.now();
+  if(!running){ running=true; loop(); }
+}
+let countUntil=0;
+function spawnStars(){ // a star near the trail centre at each flat segment
+  for(const s of path){ if(Math.abs(s.c0-s.c1)<0.01 && s.d1-s.d0>2){ const dm=(s.d0+s.d1)/2;
+    stars.push({d:dm, a:s.c0, got:false}); } }
+}
+
+// ── main loop ──
+function loop(){ if(!running){return;} const now=performance.now(); rafId=requestAnimationFrame(loop);
+  const dt=Math.min(0.05,(now-lastTs)/1000)||0; lastTs=now;
+  step(dt,now); render(now);
+}
+// one simulation step (separated from rAF so it can be unit-driven)
+function step(dt,now){
+  if(mode==="mouse") controlNorm=pointerNorm;
+  else if(flex!=null){ const n=clamp01((calHi-flex)/Math.max(calHi-calLo,1)); controlNorm = invert ? 1-n : n; } // straighter(lower flex)=up
+  updateReps();
+  if(phase==="countdown"){ const rem=Math.ceil((countUntil-now)/1000);
+    $("hint").style.display="block"; $("hint").style.color="#37e1ff";
+    $("hint").textContent = mode==="camera" ? "Move your knee up & down to fly!" : "Move your mouse / finger up & down!";
+    if(rem<=0){ phase="play"; $("countbig").style.display="none"; } else { $("countbig").style.display="flex"; $("countbig").textContent=rem; } }
+  else $("countbig").style.display="none";
+  if(phase==="play"){ elapsed+=dt; worldX+=speed*dt;
+    const center=pathCenterAt(worldX); const onTrail=Math.abs(controlNorm-center)<=halfW;
+    if(onTrail){ score+=dt*10; inChanSec+=dt; }
+    for(const st of stars){ if(!st.got && Math.abs(st.d-worldX)<0.18 && Math.abs(st.a-controlNorm)<halfW*1.3){
+      st.got=true; starsGot++; score+=25; burst(charX(), yOf(st.a)); } }
+    $("starTxt").textContent="★ "+starsGot;
+    $("progBar").style.width=Math.min(100,worldX/pathTotal*100)+"%";
+    setHint(onTrail,center);
+    if(worldX>=pathTotal){ finish(); }
+  }
+}
+function updateReps(){ romLoObs=Math.min(romLoObs,controlNorm); romHiObs=Math.max(romHiObs,controlNorm);
+  if(repPhase!=="hi" && controlNorm>0.72){ if(repPhase==="lo")reps++; repPhase="hi"; }
+  else if(repPhase!=="lo" && controlNorm<0.28){ if(repPhase==="hi")reps++; repPhase="lo"; } }
+const clamp01=v=>Math.max(0,Math.min(1,v));
+const charX=()=>W*0.30;
+const yOf=a=>playTop+(1-a)*playH;
+const PXU=()=> (W*0.70)/Math.max(lookAheadUnits(),0.5);   // px per world-unit horizontally
+function lookAheadUnits(){ return 3.2; }                   // units visible ahead of character
+
+function setHint(onTrail,center){ const el=$("hint");
+  if(!onTrail){ const up=center>controlNorm; el.style.display="block"; el.textContent=up?"↑ Reach up to the trail":"↓ Ease down to the trail"; el.style.color="#ffb84d"; }
+  else { el.style.display="block"; el.textContent="✨ On the trail — keep going!"; el.style.color="#5dff9b"; } }
+
+// ── rendering ──
+function render(now){
+  // sky
+  const g=sctx.createLinearGradient(0,0,0,H); g.addColorStop(0,"#101a4a"); g.addColorStop(0.55,"#3a2a63"); g.addColorStop(1,"#ff9e6d");
+  sctx.fillStyle=g; sctx.fillRect(0,0,W,H);
+  // stars in sky + moon
+  sctx.fillStyle="#ffffffcc"; for(let i=0;i<40;i++){ const sx=(i*97.3%W), sy=(i*53.7%(H*0.5)); sctx.globalAlpha=0.4+0.5*Math.abs(Math.sin(i+now/1400)); sctx.fillRect(sx,sy,2,2);} sctx.globalAlpha=1;
+  sctx.beginPath(); sctx.arc(W*0.8,H*0.16,26,0,7); sctx.fillStyle="#fff4d6"; sctx.fill();
+  // clouds (parallax)
+  for(const c of clouds){ c.x-=0.00006*speed*c.s; if(c.x<-0.2)c.x=1.2;
+    drawCloud((c.x*W),(playTop+c.y*playH*0.5),40*c.s); }
+  // hills (parallax silhouettes)
+  drawHills(H*0.72,"#241a4d",0.5,now); drawHills(H*0.80,"#1a1338",1.0,now);
+  // ground
+  sctx.fillStyle="#120e2b"; sctx.fillRect(0,H*0.86,W,H*0.14);
+  // trail channel
+  drawTrail(now);
+  // finish lighthouse (as it comes near)
+  const finD=pathTotal; if(worldX> finD-lookAheadUnits()){ const fx=charX()+(finD-worldX)*PXU(); drawLighthouse(fx,H*0.86); }
+  // stars
+  for(const st of stars){ if(st.got)continue; const sx=charX()+(st.d-worldX)*PXU(); if(sx< -30||sx>W+30)continue; drawStar(sx,yOf(st.a),9,now); }
+  // character
+  drawLantern(charX(), yOf(controlNorm), now);
+  // particles
+  updateParticles();
+  // camera PIP overlay
+  if(mode==="camera") drawPip();
+}
+function drawTrail(now){
+  const steps=64, x0=0, x1=W; sctx.lineWidth=1;
+  // build top & bottom edge paths
+  const pts=[]; for(let i=0;i<=steps;i++){ const sx=x0+(x1-x0)*i/steps; const d=worldX+(sx-charX())/PXU(); const c=pathCenterAt(d); pts.push([sx,yOf(c),yOf(clamp01(c+halfW)),yOf(clamp01(c-halfW))]); }
+  // fill band
+  sctx.beginPath(); sctx.moveTo(pts[0][0],pts[0][3]); for(const p of pts)sctx.lineTo(p[0],p[3]); for(let i=pts.length-1;i>=0;i--)sctx.lineTo(pts[i][0],pts[i][2]); sctx.closePath();
+  const onTrail=phase==="play"&&Math.abs(controlNorm-pathCenterAt(worldX))<=halfW;
+  sctx.fillStyle=onTrail?"rgba(93,255,155,0.16)":"rgba(55,225,255,0.12)"; sctx.fill();
+  // centre line glow
+  sctx.beginPath(); for(let i=0;i<pts.length;i++){ const p=pts[i]; i?sctx.lineTo(p[0],p[1]):sctx.moveTo(p[0],p[1]); }
+  sctx.strokeStyle="#ffe08a"; sctx.lineWidth=3; sctx.shadowColor="#ffe08a"; sctx.shadowBlur=14; sctx.stroke(); sctx.shadowBlur=0;
+  // edges
+  for(const idx of [2,3]){ sctx.beginPath(); for(let i=0;i<pts.length;i++){ const p=pts[i]; i?sctx.lineTo(p[0],p[idx]):sctx.moveTo(p[0],p[idx]); } sctx.strokeStyle="#37e1ff66"; sctx.lineWidth=2; sctx.stroke(); }
+}
+function drawHills(baseY,color,ph,now){ sctx.fillStyle=color; sctx.beginPath(); sctx.moveTo(0,H);
+  for(let x=0;x<=W;x+=20){ const y=baseY+Math.sin((x/W*6)+ph+hillSeed+worldX*0.05*ph)*26*ph; sctx.lineTo(x,y);} sctx.lineTo(W,H); sctx.closePath(); sctx.fill(); }
+function drawCloud(x,y,r){ sctx.fillStyle="#ffffff26"; sctx.beginPath(); sctx.arc(x,y,r,0,7); sctx.arc(x+r*0.8,y+4,r*0.7,0,7); sctx.arc(x-r*0.8,y+5,r*0.6,0,7); sctx.fill(); }
+function drawStar(x,y,r,now){ sctx.save(); sctx.translate(x,y); sctx.rotate(now/900); sctx.fillStyle="#ffe08a"; sctx.shadowColor="#ffe08a"; sctx.shadowBlur=10;
+  sctx.beginPath(); for(let i=0;i<10;i++){ const rr=i%2?r*0.45:r; const a=Math.PI*i/5; sctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);} sctx.closePath(); sctx.fill(); sctx.restore(); }
+function drawLantern(x,y,now){ const bob=Math.sin(now/300)*3;
+  sctx.save(); sctx.translate(x,y+bob);
+  const grad=sctx.createRadialGradient(0,0,2,0,0,46); grad.addColorStop(0,"rgba(255,224,138,0.9)"); grad.addColorStop(1,"rgba(255,224,138,0)");
+  sctx.fillStyle=grad; sctx.beginPath(); sctx.arc(0,0,46,0,7); sctx.fill();
+  sctx.fillStyle="#fff4c2"; sctx.strokeStyle="#c98a2e"; sctx.lineWidth=2;
+  sctx.beginPath(); sctx.ellipse(0,0,11,14,0,0,7); sctx.fill(); sctx.stroke();
+  sctx.fillStyle="#ffcf6b"; sctx.beginPath(); sctx.arc(0,0,5,0,7); sctx.fill();
+  // little wings
+  sctx.fillStyle="#ffffffaa"; const wf=Math.sin(now/90)*4;
+  sctx.beginPath(); sctx.ellipse(-13,-2,7,4+wf*0.2,0.5,0,7); sctx.fill(); sctx.beginPath(); sctx.ellipse(13,-2,7,4+wf*0.2,-0.5,0,7); sctx.fill();
+  sctx.restore(); }
+function drawLighthouse(x,baseY){ sctx.save(); sctx.translate(x,baseY);
+  sctx.fillStyle="#e9eefc"; sctx.beginPath(); sctx.moveTo(-16,0); sctx.lineTo(-11,-70); sctx.lineTo(11,-70); sctx.lineTo(16,0); sctx.closePath(); sctx.fill();
+  sctx.fillStyle="#ff5d78"; for(let i=0;i<3;i++){ sctx.fillRect(-15+i*0,0,0,0);} sctx.fillStyle="#ff5d7855"; sctx.fillRect(-14,-20,28,8); sctx.fillRect(-13,-45,26,8);
+  sctx.fillStyle="#ffe08a"; sctx.beginPath(); sctx.arc(0,-78,9,0,7); sctx.fill();
+  const bg=sctx.createRadialGradient(0,-78,4,0,-78,60); bg.addColorStop(0,"rgba(255,224,138,0.8)"); bg.addColorStop(1,"rgba(255,224,138,0)");
+  sctx.fillStyle=bg; sctx.beginPath(); sctx.arc(0,-78,60,0,7); sctx.fill(); sctx.restore(); }
+function burst(x,y){ for(let i=0;i<14;i++){ particles.push({x,y,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,life:1,col:Math.random()<0.5?"#ffe08a":"#37e1ff"});} }
+function updateParticles(){ for(const p of particles){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.08; p.life-=0.03;
+    if(p.life>0){ sctx.globalAlpha=p.life; sctx.fillStyle=p.col; sctx.beginPath(); sctx.arc(p.x,p.y,3,0,7); sctx.fill(); } }
+  sctx.globalAlpha=1; particles=particles.filter(p=>p.life>0); }
+function drawPip(){ pctx.clearRect(0,0,pcv.width,pcv.height);
+  if(lastRes&&lastRes.landmarks&&lastRes.landmarks[0]){ const lm=lastRes.landmarks[0];
+    pctx.strokeStyle="#37e1ffaa"; pctx.lineWidth=2;
+    for(const c of CONNECTIONS){ const a=lm[c.start],b=lm[c.end]; if(vis(a)<VIS_DRAW||vis(b)<VIS_DRAW)continue;
+      pctx.beginPath(); pctx.moveTo(a.x*pcv.width,a.y*pcv.height); pctx.lineTo(b.x*pcv.width,b.y*pcv.height); pctx.stroke(); } }
+  $("pipAngle").textContent = flex==null?"—":Math.round(flex)+"°"; }
+
+// ── finish ──
+function finish(){ phase="win"; running=false; hudOn(false); $("hint").style.display="none";
+  const dur=Math.round(elapsed); const romDeg = mode==="camera"?Math.round(Math.max(0,(calHi-calLo))):null;
+  const inPct=elapsed>0?Math.round(inChanSec/elapsed*100):0;
+  saveSession({date:new Date().toISOString(), game:"skytrail", stars:starsGot, reps, score:Math.round(score),
+    durationSec:dur, inChannelPct:inPct, romDeg, bestHold:0, totalInBand:+inChanSec.toFixed(1)});
+  $("winTiles").innerHTML=`
+    <div class="tile"><div class="tv">${starsGot}</div><div class="tl">stars</div></div>
+    <div class="tile"><div class="tv">${reps}</div><div class="tl">knee reps</div></div>
+    <div class="tile"><div class="tv">${inPct}%</div><div class="tl">on trail</div></div>
+    <div class="tile"><div class="tv">${Math.round(score)}</div><div class="tl">score</div></div>`;
+  $("winBody").innerHTML=`<p style="margin:0;color:var(--muted);font-size:13px">Great flying! You travelled the whole trail in ${dur}s`+
+    (romDeg!=null?`, moving through about <b style="color:var(--cyan)">${romDeg}°</b> of knee range`:``)+
+    `. ${reps} full up-down knee movements — that’s your dynamic ROM dose. Come back tomorrow to keep the streak.</p>`;
+  showScreen("win");
+}
+
+// ── camera / pose ──
+async function loadModel(){ $("loadmsg").textContent="Loading tracking model… (first time ~10 MB)";
+  const vision=await FilesetResolver.forVisionTasks(WASM);
+  const opts=del=>({baseOptions:{modelAssetPath:POSE_MODEL,delegate:del},runningMode:"VIDEO",numPoses:1,
+    minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
+  try{ landmarker=await PoseLandmarker.createFromOptions(vision,opts("GPU")); }catch(e){ landmarker=await PoseLandmarker.createFromOptions(vision,opts("CPU")); } }
+async function refreshCams(){ try{ const ds=await navigator.mediaDevices.enumerateDevices(); camDevices=ds.filter(d=>d.kind==="videoinput"); }catch(e){} }
+function camConstraints(){ const q={width:{ideal:1280},height:{ideal:720}}; const dev=camDevices[camIdx];
+  return dev&&dev.deviceId?{audio:false,video:{deviceId:{exact:dev.deviceId},...q}}:{audio:false,video:{facingMode:{ideal:facing},...q}}; }
+async function startCamera(){ if(stream)stream.getTracks().forEach(t=>t.stop());
+  let s; try{ s=await navigator.mediaDevices.getUserMedia(camConstraints()); }catch(e){ s=await navigator.mediaDevices.getUserMedia({audio:false,video:true}); }
+  stream=s; video.srcObject=s; await new Promise(r=>{ if(video.readyState>=1)r(); else video.onloadedmetadata=()=>r(); }); await video.play(); await refreshCams(); }
+async function switchCam(){ await refreshCams(); if(camDevices.length>1)camIdx=(camIdx+1)%camDevices.length; else facing=facing==="user"?"environment":"user";
+  try{ await startCamera(); toast("Camera switched"); }catch(e){ toast("Could not switch"); } }
+function poseLoop(){ if(!camActive){return;} requestAnimationFrame(poseLoop);
+  if(!landmarker||video.readyState<2)return; const now=performance.now();
+  if(video.currentTime!==lastVideoTime){ lastVideoTime=video.currentTime; try{ lastRes=landmarker.detectForVideo(video,now);}catch(e){} }
+  if(lastRes&&lastRes.landmarks&&lastRes.landmarks[0]){ const raw=lastRes.landmarks[0]; const wlm=(lastRes.worldLandmarks&&lastRes.worldLandmarks[0])||raw; const t=now/1000;
+    const sm=raw.map((p,i)=>({x:fX[i].filt(p.x,t),y:fY[i].filt(p.y,t),z:p.z,visibility:vis(p)}));
+    const [vl]=detectView(sm); const asp=(video.videoWidth/video.videoHeight)||(16/9);
+    const mres=meter.measure(sm,wlm,vl,asp);
+    if(mres.activeFlex!=null){ flex=flexSmooth.filt(mres.activeFlex,t); flexConf=mres.activeConf; } else { flexConf=Math.max(0,(mres.activeConf||0)); }
+    if(mres.activeFlex==null) flex=null;
+    if(phase==="warmup" && flex!=null){ warmMin=Math.min(warmMin,flex); warmMax=Math.max(warmMax,flex); $("calRange").textContent=`range ${Math.round(warmMin)}–${Math.round(warmMax)}°`; }
+    if(phase==="calib"||phase==="warmup"){ $("calVal").textContent=(flex!=null?Math.round(flex):"—")+"°"; updateTrackBadge(); }
+  } else { flex=null; flexConf=0; if(phase==="calib"||phase==="warmup")updateTrackBadge(); } }
+function updateTrackBadge(){ const b=$("trackBadge"); if(!b)return;
+  if(flex!=null && flexConf>=0.6){ b.textContent="✓ Leg tracked ("+Math.round(flexConf*100)+"%)"; b.style.color="var(--green)"; }
+  else if(flexConf>=0.25){ b.textContent="⚠ Move back — show your whole leg (hip→ankle)"; b.style.color="var(--amber)"; }
+  else { b.textContent="📷 Step into frame, side-on to the camera"; b.style.color="var(--amber)"; }
+  // live control preview: dot shows where this knee position flies the lantern
+  const dot=$("ctrlDot"); if(dot){ if(flex!=null){ const range=Math.max(calHi-calLo,1); let n=clamp01((calHi-flex)/range); if(invert)n=1-n;
+      dot.style.left=(n*170)+"px"; dot.style.opacity="1"; } else dot.style.opacity="0.3"; } }
+
+// ── warm-up calibration ──
+$("btnCalStart").onclick=()=>{ warmMin=999;warmMax=-999; phase="warmup"; warmUntil=performance.now()+6000; $("calMsg").innerHTML="Now — gently <b>bend and straighten</b> your knee a few times through a comfortable range…";
+  const tick=()=>{ if(phase!=="warmup")return; if(performance.now()>=warmUntil){ endWarm(); } else requestAnimationFrame(tick); }; tick(); };
+function endWarm(){ if(warmMax-warmMin<12){ toast("Try a bigger range"); phase="calib"; return; }
+  calLo=warmMin; calHi=warmMax; phase="calib"; $("btnCalStart").style.display="none"; $("btnCalGo").style.display="";
+  $("calMsg").innerHTML=`Range learned: <b>${Math.round(calLo)}–${Math.round(calHi)}°</b>. Straighten to fly up, bend to come down. Ready?`; }
+$("btnCalGo").onclick=()=>{ beginLevel(); };
+$("btnCalSkip").onclick=()=>{ if(calHi-calLo<12){ calLo=0; calHi=120; } beginLevel(); };  // fallback: sensible default range
+$("btnInvert").onclick=()=>{ invert=!invert; toast("Direction "+(invert?"inverted (bend = up)":"normal (straighten = up)")); };
+$("btnSwitchCal").onclick=switchCam;
+
+// ── pointer (mouse/touch) control ──
+function ptr(e){ const y=(e.touches?e.touches[0].clientY:e.clientY); pointerNorm=clamp01(1-(y-playTop)/playH); }
+scene.addEventListener("mousemove",ptr); scene.addEventListener("touchmove",e=>{ptr(e);e.preventDefault();},{passive:false}); scene.addEventListener("touchstart",ptr);
+
+// ── progress ──
+function renderProgress(){ const all=loadSessions().filter(s=>s.game==="skytrail"); const s=summarize(all);
+  $("progTiles").innerHTML=`
+    <div class="tile"><div class="tv">${all.length}</div><div class="tl">flights</div></div>
+    <div class="tile"><div class="tv">${s.thisWeek}</div><div class="tl">this week</div></div>
+    <div class="tile"><div class="tv">${all.reduce((a,b)=>a+(b.reps||0),0)}</div><div class="tl">total reps</div></div>
+    <div class="tile"><div class="tv">${s.streak}</div><div class="tl">day streak</div></div>`;
+  if(!all.length){ $("progBody").innerHTML='<p style="color:var(--muted)">No flights yet — reach the lighthouse and it appears here.</p>'; return; }
+  const rows=all.slice(-8).reverse().map(r=>{const d=new Date(r.date);
+    return `<tr><td>${d.toLocaleDateString()} ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td><td>${r.stars||0}★</td><td>${r.reps||0}</td><td>${r.romDeg!=null?r.romDeg+"°":"–"}</td><td>${r.score||0}</td></tr>`;}).join("");
+  $("progBody").innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tr style="color:var(--muted)"><th style="text-align:left">When</th><th>Stars</th><th>Reps</th><th>ROM</th><th>Score</th></tr>${rows}</table>`;
+}
+
+// ── controls ──
+$("btnMouse").onclick=startMouse;
+$("btnCam").onclick=startCameraFlow;
+$("btnBackMenu").onclick=()=>{ phase="menu"; running=false; camActive=false; showScreen("menu"); $("btnCam").style.display="";$("btnMouse").style.display="";$("spin").style.display="none"; $("btnCalStart").style.display="";$("btnCalGo").style.display="none"; };
+$("btnPause").onclick=()=>{ phase="menu"; running=false; camActive=false; hudOn(false); $("hint").style.display="none"; showScreen("menu"); $("btnCam").style.display="";$("btnMouse").style.display="";$("spin").style.display="none"; };
+$("btnRecal").onclick=()=>{ if(mode==="camera"){ running=false; showScreen("calib"); phase="calib"; hudOn(false); $("hint").style.display="none"; $("btnCalStart").style.display="";$("btnCalGo").style.display="none"; } };
+$("btnSwitch").onclick=switchCam;
+$("btnAgain").onclick=()=>{ if(mode==="camera"){ running=false; showScreen("calib"); phase="calib"; $("btnCalStart").style.display="";$("btnCalGo").style.display="none"; } else beginLevel(); };
+$("btnMenu2").onclick=()=>{ showScreen("menu"); $("btnCam").style.display="";$("btnMouse").style.display=""; };
+$("lnkProg").onclick=()=>{ renderProgress(); showScreen("progress"); };
+$("btnProgBack").onclick=()=>showScreen("menu");
+$("btnClear").onclick=()=>{ if(confirm("Clear Sky Trail history?")){ const keep=loadSessions().filter(s=>s.game!=="skytrail"); clearSessions(); keep.forEach(saveSession); renderProgress(); } };
+
+resize();
+if(!window.isSecureContext && location.hostname!=="localhost"){ $("loadmsg").textContent="⚠ Camera needs HTTPS — mouse preview works anywhere."; }
+// expose minimal hook for automated testing (drive control without a camera)
+window.__sky={ setControl:v=>{pointerNorm=clamp01(v);}, state:()=>({phase,worldX:+worldX.toFixed(2),pathTotal:+pathTotal.toFixed(2),starsGot,reps,score:Math.round(score),stars:stars.length}),
+  center:()=>pathCenterAt(worldX), forcePlay:()=>{phase="play";}, step:(dt)=>step(dt||0.05, performance.now()), skipTo:d=>{worldX=d;} };
+</script>
+</body>
+</html>
