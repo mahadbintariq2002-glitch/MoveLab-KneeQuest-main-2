@@ -6,6 +6,7 @@ import { OKCSave, rankFor } from "./save.js";
 import { Audio } from "../arcade/audio.js";
 import QUAD from "./games/quad.js";
 import SLR from "./games/slr.js";
+import HEEL from "./games/heel.js";
 
 const $=id=>document.getElementById(id);
 const stage=$("stage"), sctx=stage.getContext("2d"), video=$("video"), pip=$("pip"), pctx=pip.getContext("2d");
@@ -14,7 +15,7 @@ const stage=$("stage"), sctx=stage.getContext("2d"), video=$("video"), pip=$("pi
 const GAMES=[
   { def:QUAD },
   { def:SLR },
-  { soon:true, id:"heel", name:"Trace the Arc", emoji:"🌈", exercise:"Heel Slides / ROM" },
+  { def:HEEL },
   { soon:true, id:"tke",  name:"Lock the Slot", emoji:"🔩", exercise:"Terminal Knee Ext." },
   { soon:true, id:"tempo",name:"Tempo Lift",  emoji:"⏱️", exercise:"Resisted Knee Ext." },
   { soon:true, id:"ham",  name:"Reel It In",  emoji:"🎣", exercise:"Hamstring Curl" },
@@ -63,7 +64,10 @@ function openDiff(){ $("diffTitle").textContent=curDef.name; $("diffHow").innerH
   const g=$("diffGrid"); g.innerHTML=""; DIFFS.forEach(dd=>{ const el=document.createElement("button"); el.className="pick diff"; el.dataset.id=dd.id;
     el.innerHTML=`<div class="pn">${dd.name}</div><div class="pd">${dd.desc}</div>`; el.onclick=()=>{ chosenDiff=dd.id; sel("diff",dd.id); Audio.tap&&Audio.tap(); }; g.appendChild(el); });
   sel("diff",chosenDiff);
-  const hg=$("holdRow"); hg.innerHTML=""; HOLD_PRESETS.forEach(sec=>{ const el=document.createElement("button"); el.className="pick hold"; el.dataset.id=sec;
+  const usesHold = curDef.usesHold!==false;
+  $("holdLabel").style.display = usesHold?"block":"none";
+  const hg=$("holdRow"); hg.innerHTML=""; hg.style.display = usesHold?"flex":"none";
+  if(usesHold) HOLD_PRESETS.forEach(sec=>{ const el=document.createElement("button"); el.className="pick hold"; el.dataset.id=sec;
     el.style.width="92px"; el.innerHTML=`<div class="pn">${sec}s</div>`; el.onclick=()=>{ chosenHold=sec; sel("hold",sec); Audio.tap&&Audio.tap(); }; hg.appendChild(el); });
   sel("hold",chosenHold);
   showScreen("diffScreen"); }
