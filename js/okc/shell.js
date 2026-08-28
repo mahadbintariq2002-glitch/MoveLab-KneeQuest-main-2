@@ -27,8 +27,9 @@ const DIFFS=[
 ];
 const ACH={ first:"first_okc", steady90:"okc_steady90", champ:"okc_champion", streak3:"okc_streak3" };
 const HOLD_PRESETS=[3,5,8,12,20];           // seconds the patient must hold per rep
+const REP_PRESETS=[3,5,8,10,15];            // number of reps in the set
 const CONF_GATE=0.4;                        // min tracking confidence to accept a frame (low-light friendly)
-let chosenHold=8, extRef=null;              // extRef = patient's calibrated full-extension angle
+let chosenHold=8, chosenReps=5, extRef=null; // extRef = patient's calibrated full-extension angle
 
 let W=0,H=0,DPR=1, scene="hub", mode="mouse", running=false, lastTs=0, countUntil=0;
 let curDef=null, chosenDiff="gentle", game=null, ended=false, pointerNorm=0.5;
@@ -70,6 +71,9 @@ function openDiff(){ $("diffTitle").textContent=curDef.name; $("diffHow").innerH
   if(usesHold) HOLD_PRESETS.forEach(sec=>{ const el=document.createElement("button"); el.className="pick hold"; el.dataset.id=sec;
     el.style.width="92px"; el.innerHTML=`<div class="pn">${sec}s</div>`; el.onclick=()=>{ chosenHold=sec; sel("hold",sec); Audio.tap&&Audio.tap(); }; hg.appendChild(el); });
   sel("hold",chosenHold);
+  const rg=$("repRow"); rg.innerHTML=""; REP_PRESETS.forEach(n=>{ const el=document.createElement("button"); el.className="pick reps"; el.dataset.id=n;
+    el.style.width="92px"; el.innerHTML=`<div class="pn">${n}</div>`; el.onclick=()=>{ chosenReps=n; sel("reps",n); Audio.tap&&Audio.tap(); }; rg.appendChild(el); });
+  sel("reps",chosenReps);
   showScreen("diffScreen"); }
 function sel(cls,id){ document.querySelectorAll("."+cls).forEach(e=>e.classList.toggle("sel",e.dataset.id==id)); }
 
@@ -123,7 +127,7 @@ function startGame(){ ended=false; _lastFb=""; _count=-1; showScreen("game"); $(
   say(curDef.name+". "+(curDef.exercise||""), 1.0);
   $("pipWrap").style.display = mode==="camera" ? "block" : "none";
   const er = extRef!=null ? extRef : (pose.m.kneeAngle||178);   // fall back to current straight reading
-  game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, extRef:er, audio:Audio, onEvent:onGameEvent });
+  game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, repsTarget:chosenReps, extRef:er, audio:Audio, onEvent:onGameEvent });
   $("gTitle").textContent=curDef.name;
   countUntil=performance.now()+3000; running=true; lastTs=performance.now(); requestAnimationFrame(loop); }
 
@@ -213,7 +217,7 @@ stage.addEventListener("mousemove",ptr); stage.addEventListener("touchmove",e=>{
 resize(); buildHub(); refreshHub(); showScreen("hub");
 // test hook
 window.__okc={ scene:()=>scene,
-  openGame:(id,hold)=>{ const G=GAMES.find(g=>g.def&&g.def.id===id); curDef=(G&&G.def)||QUAD; chosenDiff="gentle"; if(hold)chosenHold=hold; mode="mouse"; startGame(); },
+  openGame:(id,hold,reps)=>{ const G=GAMES.find(g=>g.def&&g.def.id===id); curDef=(G&&G.def)||QUAD; chosenDiff="gentle"; if(hold)chosenHold=hold; if(reps)chosenReps=reps; mode="mouse"; startGame(); },
   forcePlay:()=>{countUntil=0;}, setPointer:v=>{pointerNorm=v;},
   step:(dt)=>{ if(!game)return; game.update(dt||0.05, mouseMetricsFor(pointerNorm), performance.now()); },
   status:()=>game?game.status():null };

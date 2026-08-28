@@ -21,7 +21,7 @@ class LiftOff {
     this.maxElev = this.d.target + this.d.band + 18;
     this.hold=new HoldDecay({holdSecs:this.holdSecs, decay:this.d.decay});
     this.steady=new Steady(20, 6);
-    this.score=0; this.qSum=0; this.qN=0; this.reps=0; this.repsTarget=this.d.reps;
+    this.score=0; this.qSum=0; this.qN=0; this.reps=0; this.repsTarget=ctx.repsTarget||this.d.reps;
     this.phase="raise";                      // "raise" (charge) | "lower" (bring leg down to arm next)
     this.baseline=null; this.elev=0; this.balloonY=0.15; this.glow=0; this.wobble=0; this.t=0; this.rot=0;
     this.clouds=Array.from({length:5},()=>({x:Math.random(),y:0.1+Math.random()*0.5,s:0.5+Math.random()*0.7}));
@@ -108,7 +108,9 @@ class LiftOff {
     else { g.fillStyle=this.kneeStraight?"#8affc0":"#ff6f6f"; g.fillText(this.kneeStraight?"● knee straight":"● knee BENT — straighten", cx, H*0.14+20); }
     g.font="11px sans-serif"; g.fillStyle="#9aa6d4"; g.fillText(`confidence ${Math.round(this.conf*100)}%  ·  hold ${this.holdSecs}s`, cx, H*0.14+38);
     // reps pips
-    for(let i=0;i<this.repsTarget;i++){ g.fillStyle=i<this.reps?"#ffe08a":"#ffffff33"; g.font="24px sans-serif"; g.fillText(i<this.reps?"🎈":"○", cx-(this.repsTarget-1)*18 + i*36, H*0.955); }
+    { const pw=Math.min(36,(this.W*0.9)/this.repsTarget), pf=Math.max(12,Math.min(24,pw*0.68));
+      g.font=pf+"px sans-serif";
+      for(let i=0;i<this.repsTarget;i++){ g.fillStyle=i<this.reps?"#ffe08a":"#ffffff33"; g.fillText(i<this.reps?"🎈":"○", cx-(this.repsTarget-1)*pw/2 + i*pw, H*0.955); } }
     // particles + pops
     for(const p of this.parts){ g.globalAlpha=Math.max(0,p.life); g.fillStyle=p.c; g.beginPath(); g.arc(p.x,p.y,3,0,7); g.fill(); } g.globalAlpha=1;
     for(const p of this.pops){ g.globalAlpha=Math.max(0,p.life); g.fillStyle="#ffe08a"; g.font="bold 20px sans-serif"; g.textAlign="center"; g.fillText(p.t,p.x,p.y); } g.globalAlpha=1;
