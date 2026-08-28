@@ -124,6 +124,7 @@ function camLoop(){ if(!camReady || scene!=="calibScreen") return; requestAnimat
   else { b.textContent=`✓ Tracking ${conf}% — ready`; b.style.color="#8affc0"; } }
 
 function startGame(){ ended=false; _lastFb=""; _count=-1; showScreen("game"); $("hud").classList.add("on");
+  $("hud").classList.toggle("fbTop", !!curDef.hudFeedbackTop);
   $("calibScreen").classList.remove("preview"); $("framehint").style.display="none";
   say(curDef.name+". "+(curDef.exercise||""), 1.0);
   $("pipWrap").style.display = mode==="camera" ? "block" : "none";

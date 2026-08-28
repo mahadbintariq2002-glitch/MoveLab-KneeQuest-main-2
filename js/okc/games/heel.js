@@ -133,16 +133,16 @@ class TraceArc {
     // endpoints labels
     g.fillStyle="#dfe6ff"; g.font="bold 12px sans-serif"; g.textAlign="left"; g.fillText("EXTENDED", cx-baseR-8, gy+18);
     g.textAlign="right"; g.fillText("FLEXED", cx+baseR+8, gy+18);
-    // live readout
+    // live readout (kept below the top cue banner, which now lives up here for this game)
     g.textAlign="center"; g.font="900 30px sans-serif"; g.fillStyle="#eef2ff";
-    g.fillText(this.angleDisp==null?"— °":Math.round(this.angleDisp)+"°", cx, H*0.16);
+    g.fillText(this.angleDisp==null?"— °":Math.round(this.angleDisp)+"°", cx, H*0.26);
     g.font="bold 13px sans-serif";
-    if(this.angle==null){ g.fillStyle="#ffb84d"; g.fillText("no knee detected", cx, H*0.16+20); }
-    else { g.fillStyle=this.rc.phase==="lo"?"#8affc0":"#37e1ff"; g.fillText(`target flex ${this.d.flexOff}° · reached ${Math.max(0,Math.round(this.extRef-this.angle))}°`, cx, H*0.16+20); }
-    g.font="11px sans-serif"; g.fillStyle="#9aa6d4"; g.fillText(`confidence ${Math.round(this.conf*100)}%`, cx, H*0.16+38);
+    if(this.angle==null){ g.fillStyle="#ffb84d"; g.fillText("no knee detected", cx, H*0.26+20); }
+    else { g.fillStyle=this.rc.phase==="lo"?"#8affc0":"#37e1ff"; g.fillText(`target flex ${this.d.flexOff}° · reached ${Math.max(0,Math.round(this.extRef-this.angle))}°`, cx, H*0.26+20); }
+    g.font="11px sans-serif"; g.fillStyle="#9aa6d4"; g.fillText(`confidence ${Math.round(this.conf*100)}%`, cx, H*0.26+38);
     { const pw=Math.min(34,(W*0.9)/this.repsTarget), pf=Math.max(12,Math.min(22,pw*0.62));
       g.font=pf+"px sans-serif"; g.textAlign="center";
-      for(let i=0;i<this.repsTarget;i++) g.fillText(i<this.reps?"🌈":"○", cx-(this.repsTarget-1)*pw/2 + i*pw, H*0.06); }
+      for(let i=0;i<this.repsTarget;i++) g.fillText(i<this.reps?"🌈":"○", cx-(this.repsTarget-1)*pw/2 + i*pw, H*0.965); }
     for(const p of this.parts){ g.globalAlpha=Math.max(0,p.life); g.fillStyle=p.c; g.beginPath(); g.arc(p.x,p.y,3,0,7); g.fill(); } g.globalAlpha=1;
     for(const p of this.confetti){ g.save(); g.globalAlpha=Math.max(0,p.life); g.translate(p.x,p.y); g.rotate(p.rot); g.fillStyle=p.c; g.fillRect(-4,-2.5,8,5); g.restore(); } g.globalAlpha=1;
     for(const p of this.pops){ g.globalAlpha=Math.max(0,p.life); g.fillStyle="#ffe08a"; g.font="bold 20px sans-serif"; g.textAlign="center"; g.fillText(p.t,p.x,p.y); } g.globalAlpha=1;
@@ -233,7 +233,7 @@ function gapOf(self){ const base=baseRof(self), maxR=maxRof(self), n=Math.max(1,
 export default {
   id:"heel", name:"Trace the Arc", emoji:"🌈", exercise:"Heel Slides / ROM", camera:"Sagittal (side-on)",
   howto:"Lie or sit side-on. <b>Slide your heel toward you</b> to bend the knee as deep as the target, then <b>slide it back out straight</b>. Each full slide paints one band of the rainbow and drops a coin in the pot.",
-  calib:"extension", usesHold:false, diffs:Object.keys(DIFFS),
+  calib:"extension", usesHold:false, hudFeedbackTop:true, diffs:Object.keys(DIFFS),
   // mouse-preview: pointer height → knee angle (top=straight, bottom=deep flex)
   mouseMetrics(p){ const angle=180-p*100; return { tracked:true, conf:1, flex:180-angle, kneeFlex:180-angle, kneeAngle:angle, kneeAngleDisp:angle, hipAngle:150, ankle:{x:.5,y:p}, side:"L" }; },
   make(ctx){ return new TraceArc(ctx); },
