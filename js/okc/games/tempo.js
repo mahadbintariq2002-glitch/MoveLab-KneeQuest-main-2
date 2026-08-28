@@ -11,10 +11,13 @@ import { HoldDecay, starsFor } from "../rehab.js";
 // flexOff = the bent starting depth (degrees of flexion from extRef).
 // upSecs/downSecs = prescribed seconds for the lift / lower. band = allowed
 // fractional drift (0..1 of the ROM) from the ideal pace before it's flagged off-tempo.
+// Kept moderate throughout — this app's population includes KOA grade 2-3 patients,
+// who need a shallower start and a slower, more forgiving pace than a general
+// strengthening protocol would use.
 const DIFFS = {
-  gentle:   { flexOff:60, upSecs:3,   holdSecs:1,   downSecs:3, band:0.22, reps:4 },
-  steady:   { flexOff:75, upSecs:3,   holdSecs:1,   downSecs:4, band:0.16, reps:5 },
-  champion: { flexOff:90, upSecs:2.5, holdSecs:1.5, downSecs:5, band:0.10, reps:6 },
+  gentle:   { flexOff:45, upSecs:4.5, holdSecs:1.5, downSecs:4.5, band:0.28, reps:3 },
+  steady:   { flexOff:60, upSecs:4,   holdSecs:1.5, downSecs:5,   band:0.22, reps:4 },
+  champion: { flexOff:75, upSecs:3.5, holdSecs:2,   downSecs:6,   band:0.16, reps:5 },
 };
 
 class TempoLift {
