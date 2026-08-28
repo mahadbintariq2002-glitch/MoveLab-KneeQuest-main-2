@@ -26,7 +26,8 @@ class TempoLift {
     this.d = DIFFS[ctx.difficulty]||DIFFS.gentle;
     this.extRef = ctx.extRef || 178;                    // patient's calibrated full-extension angle (0° reference)
     this.startAngle = this.extRef - this.d.flexOff;      // bent starting position
-    this.upSecs=this.d.upSecs; this.holdSecs=this.d.holdSecs; this.downSecs=this.d.downSecs; this.band=this.d.band;
+    const pace = ctx.paceMult || 1;                       // >1 = slower ghost dot, <1 = faster
+    this.upSecs=this.d.upSecs*pace; this.holdSecs=this.d.holdSecs*pace; this.downSecs=this.d.downSecs*pace; this.band=this.d.band;
     this.score=0; this.qSum=0; this.qN=0; this.reps=0; this.repsTarget=ctx.repsTarget||this.d.reps;
     this.phase="start"; this.phaseT=0; this.upSum=0; this.upN=0; this.downSum=0; this.downN=0;
     this.pos=0; this.idealPos=0; this.inBand=true; this.t=0; this.gearRot=0;
@@ -163,7 +164,7 @@ class TempoLift {
 export default {
   id:"tempo", name:"Tempo Lift", emoji:"⏱️", exercise:"Resisted Knee Extension", camera:"Sagittal (side-on)",
   howto:"Sit with resistance on your shin (band or ankle weight). Start <b>bent</b>, <b>extend on the beat</b> to lock out, <b>hold briefly</b>, then <b>lower under control</b> — match the ghost pin's pace, don't race it.",
-  calib:"extension", usesHold:false, diffs:Object.keys(DIFFS),
+  calib:"extension", usesHold:false, usesPace:true, diffs:Object.keys(DIFFS),
   // mouse-preview: pointer height → knee angle over a generous arc near extension
   mouseMetrics(p){ const angle=178-p*90; return { tracked:true, conf:1, flex:178-angle, kneeFlex:178-angle, kneeAngle:angle, kneeAngleDisp:angle, hipAngle:150, ankle:{x:.5,y:p}, side:"L" }; },
   make(ctx){ return new TempoLift(ctx); },
