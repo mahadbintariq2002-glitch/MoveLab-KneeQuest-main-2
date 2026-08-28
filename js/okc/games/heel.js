@@ -4,12 +4,14 @@
 // back out to full EXTENSION. One full in-and-out slide = one rainbow arc painted.
 import { RepCycle, starsFor } from "../rehab.js";
 
-// hi = knee angle (180=straight) that counts as "back to extension" to close a rep.
-// lo = knee angle the patient must reach (or pass) to count as "deep enough" flexion.
+// extOff = degrees of flexion (from the patient's calibrated 0°) still counted as
+// "back to extension" to close a rep. flexOff = degrees of flexion the patient must
+// reach (or pass) to count as "deep enough". Both are measured from extRef, the
+// patient's own captured straight-leg reading — not an assumed anatomical 180°.
 const DIFFS = {
-  gentle:   { hi:165, lo:135, reps:3 },   // ~45° of flexion required
-  steady:   { hi:165, lo:110, reps:4 },   // ~70° of flexion required
-  champion: { hi:168, lo:90,  reps:5 },   // ~90° of flexion required
+  gentle:   { extOff:15, flexOff:45, reps:3 },
+  steady:   { extOff:15, flexOff:70, reps:4 },
+  champion: { extOff:12, flexOff:90, reps:5 },
 };
 const BAND_COLORS=["#ff6f6f","#ffb84d","#ffe08a","#8affc0","#37e1ff","#b58aff"];
 
@@ -17,7 +19,10 @@ class TraceArc {
   constructor(ctx){
     this.W=ctx.W; this.H=ctx.H; this.audio=ctx.audio; this.onEvent=ctx.onEvent||(()=>{});
     this.d = DIFFS[ctx.difficulty]||DIFFS.gentle;
-    this.rc = new RepCycle({hi:this.d.hi, lo:this.d.lo});
+    this.extRef = ctx.extRef || 178;         // patient's calibrated full-extension angle (0° reference)
+    this.hiAngle = this.extRef - this.d.extOff;
+    this.loAngle = this.extRef - this.d.flexOff;
+    this.rc = new RepCycle({hi:this.hiAngle, lo:this.loAngle});
     this.score=0; this.qSum=0; this.qN=0; this.reps=0; this.repsTarget=ctx.repsTarget||this.d.reps;
     this.minAngleCycle=999; this.pos=0; this.prevPos=0; this.glow=0; this.t=0;
     this.parts=[]; this.pops=[]; this.trail=[]; this.confetti=[]; this.sparkles=[]; this.done=false; this.result=null;
@@ -37,11 +42,11 @@ class TraceArc {
       this.minAngleCycle=Math.min(this.minAngleCycle, angle);
       const r=this.rc.update(angle);
       // trickle score while progressing deeper into flexion (encourages the slide-in)
-      const pos=Math.max(0,Math.min(1,(this.d.hi-angle)/(this.d.hi-this.d.lo)));
+      const pos=Math.max(0,Math.min(1,(this.hiAngle-angle)/(this.hiAngle-this.loAngle)));
       if(pos>this.pos) this.score += (pos-this.pos)*40;
       this.prevPos=this.pos; this.pos=pos;
       if(r.justRep){
-        const depth=Math.max(0,Math.min(1,(this.d.hi-this.minAngleCycle)/(this.d.hi-this.d.lo)));
+        const depth=Math.max(0,Math.min(1,(this.hiAngle-this.minAngleCycle)/(this.hiAngle-this.loAngle)));
         this.qSum+=depth; this.qN++; this.minAngleCycle=999;
         this.reps++; this.score+=60; this.potBounce=1; this._burst(); this.pop("+60 🌈"); this.audio&&this.audio.reward();
         this.onEvent({type:"rep",reps:this.reps});
@@ -133,7 +138,7 @@ class TraceArc {
     g.fillText(this.angleDisp==null?"— °":Math.round(this.angleDisp)+"°", cx, H*0.16);
     g.font="bold 13px sans-serif";
     if(this.angle==null){ g.fillStyle="#ffb84d"; g.fillText("no knee detected", cx, H*0.16+20); }
-    else { g.fillStyle=this.rc.phase==="lo"?"#8affc0":"#37e1ff"; g.fillText(`target flex ${180-this.d.lo}° · reached ${Math.max(0,Math.round(180-this.angle))}°`, cx, H*0.16+20); }
+    else { g.fillStyle=this.rc.phase==="lo"?"#8affc0":"#37e1ff"; g.fillText(`target flex ${this.d.flexOff}° · reached ${Math.max(0,Math.round(this.extRef-this.angle))}°`, cx, H*0.16+20); }
     g.font="11px sans-serif"; g.fillStyle="#9aa6d4"; g.fillText(`confidence ${Math.round(this.conf*100)}%`, cx, H*0.16+38);
     { const pw=Math.min(34,(W*0.9)/this.repsTarget), pf=Math.max(12,Math.min(22,pw*0.62));
       g.font=pf+"px sans-serif"; g.textAlign="center";
@@ -228,7 +233,7 @@ function gapOf(self){ const base=baseRof(self), maxR=maxRof(self), n=Math.max(1,
 export default {
   id:"heel", name:"Trace the Arc", emoji:"🌈", exercise:"Heel Slides / ROM", camera:"Sagittal (side-on)",
   howto:"Lie or sit side-on. <b>Slide your heel toward you</b> to bend the knee as deep as the target, then <b>slide it back out straight</b>. Each full slide paints one band of the rainbow and drops a coin in the pot.",
-  calib:"none", usesHold:false, diffs:Object.keys(DIFFS),
+  calib:"extension", usesHold:false, diffs:Object.keys(DIFFS),
   // mouse-preview: pointer height → knee angle (top=straight, bottom=deep flex)
   mouseMetrics(p){ const angle=180-p*100; return { tracked:true, conf:1, flex:180-angle, kneeFlex:180-angle, kneeAngle:angle, kneeAngleDisp:angle, hipAngle:150, ankle:{x:.5,y:p}, side:"L" }; },
   make(ctx){ return new TraceArc(ctx); },

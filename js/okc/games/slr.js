@@ -4,7 +4,8 @@
 //
 // Signals used (from the shared PoseController):
 //   hipAngle   shoulder–hip–knee angle → leg elevation = baseline(rest) − hipAngle
-//   kneeAngle  hip–knee–ankle (180=straight) → knee must stay > 180−kneeTol
+//   kneeAngle  hip–knee–ankle (180=straight) → knee must stay within kneeTol of the
+//              patient's own calibrated extension (extRef), not an assumed 180°
 import { HoldDecay, Steady, starsFor } from "../rehab.js";
 
 const DIFFS = {
@@ -17,6 +18,7 @@ class LiftOff {
   constructor(ctx){
     this.W=ctx.W; this.H=ctx.H; this.audio=ctx.audio; this.onEvent=ctx.onEvent||(()=>{});
     this.d = DIFFS[ctx.difficulty]||DIFFS.gentle;
+    this.extRef = ctx.extRef || 178;         // patient's calibrated full-extension angle (0° reference)
     this.holdSecs = ctx.holdSecs || 6;
     this.maxElev = this.d.target + this.d.band + 18;
     this.hold=new HoldDecay({holdSecs:this.holdSecs, decay:this.d.decay});
@@ -35,7 +37,7 @@ class LiftOff {
     const tracked = m.tracked && m.hipAngle!=null; this.tracked=tracked; this.conf=m.conf||0;
     // leg elevation = hip flexion (shoulder–hip–knee); ~0 lying flat, grows as the straight leg raises
     const elev = tracked ? Math.max(0, 180 - m.hipAngle) : 0; this.elev=elev;
-    const kneeStraight = tracked && m.kneeAngle!=null && m.kneeAngle >= (180 - this.d.kneeTol); this.kneeStraight=kneeStraight;
+    const kneeStraight = tracked && m.kneeAngle!=null && m.kneeAngle >= (this.extRef - this.d.kneeTol); this.kneeStraight=kneeStraight;
     const inBand = tracked && elev >= this.d.target - this.d.band && elev <= this.d.target + this.d.band;
     const inZone = inBand && kneeStraight;
     if(tracked) this.steady.push(elev);
@@ -125,7 +127,7 @@ class LiftOff {
 export default {
   id:"slr", name:"Lift-Off", emoji:"🎈", exercise:"Straight Leg Raise", camera:"Sagittal (side-on)",
   howto:"Lie side-on. Keep your <b>knee straight</b> and <b>raise your whole leg</b> to float the balloon into the target band, then <b>hold</b>. A bent knee makes it wobble. Lower to reset.",
-  calib:"none", diffs:Object.keys(DIFFS),
+  calib:"extension", diffs:Object.keys(DIFFS),
   // mouse-preview: pointer height → leg elevation, knee assumed straight
   mouseMetrics(p){ const raise=(1-p)*70; return { tracked:true, conf:1, flex:3, kneeFlex:3, kneeAngle:177, hipAngle:180-raise, ankle:{x:0.5,y:p}, side:"L" }; },
   make(ctx){ return new LiftOff(ctx); },

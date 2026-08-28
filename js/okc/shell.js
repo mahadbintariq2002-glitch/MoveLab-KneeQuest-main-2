@@ -7,6 +7,7 @@ import { Audio } from "../arcade/audio.js";
 import QUAD from "./games/quad.js";
 import SLR from "./games/slr.js";
 import HEEL from "./games/heel.js";
+import TKE from "./games/tke.js";
 
 const $=id=>document.getElementById(id);
 const stage=$("stage"), sctx=stage.getContext("2d"), video=$("video"), pip=$("pip"), pctx=pip.getContext("2d");
@@ -16,7 +17,7 @@ const GAMES=[
   { def:QUAD },
   { def:SLR },
   { def:HEEL },
-  { soon:true, id:"tke",  name:"Lock the Slot", emoji:"🔩", exercise:"Terminal Knee Ext." },
+  { def:TKE },
   { soon:true, id:"tempo",name:"Tempo Lift",  emoji:"⏱️", exercise:"Resisted Knee Ext." },
   { soon:true, id:"ham",  name:"Reel It In",  emoji:"🎣", exercise:"Hamstring Curl" },
 ];
