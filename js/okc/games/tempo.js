@@ -26,6 +26,7 @@ class TempoLift {
     this.d = DIFFS[ctx.difficulty]||DIFFS.gentle;
     this.extRef = ctx.extRef || 178;                    // patient's calibrated full-extension angle (0° reference)
     this.startAngle = this.extRef - this.d.flexOff;      // bent starting position
+    this.ghost = ctx.ghost !== false;                     // false = free-pace mode: no ghost, no pace scoring
     const pace = ctx.paceMult || 1;                       // >1 = slower ghost dot, <1 = faster
     this.upSecs=this.d.upSecs*pace; this.holdSecs=this.d.holdSecs*pace; this.downSecs=this.d.downSecs*pace; this.band=this.d.band;
     this.score=0; this.qSum=0; this.qN=0; this.reps=0; this.repsTarget=ctx.repsTarget||this.d.reps;
@@ -48,7 +49,7 @@ class TempoLift {
       if(tracked && this.pos<=0.08){ this.phase="up"; this.phaseT=0; this.upSum=0; this.upN=0; }
     } else if(this.phase==="up"){
       this.phaseT+=dt; this.idealPos=Math.min(1,this.phaseT/this.upSecs);
-      if(tracked){ this.inBand=Math.abs(this.pos-this.idealPos)<=this.band; this.upSum+=this.inBand?1:0; this.upN++; }
+      if(tracked){ this.inBand=!this.ghost || Math.abs(this.pos-this.idealPos)<=this.band; this.upSum+=this.inBand?1:0; this.upN++; }
       if(tracked && this.pos>=0.95){ this.phase="hold"; this.phaseT=0; }
     } else if(this.phase==="hold"){
       this.phaseT+=dt; this.idealPos=1;
@@ -57,7 +58,7 @@ class TempoLift {
       if(this.phaseT>=this.holdSecs){ this.phase="down"; this.phaseT=0; this.downSum=0; this.downN=0; }
     } else { // "down"
       this.phaseT+=dt; this.idealPos=Math.max(0,1-this.phaseT/this.downSecs);
-      if(tracked){ this.inBand=Math.abs(this.pos-this.idealPos)<=this.band; this.downSum+=this.inBand?1:0; this.downN++; }
+      if(tracked){ this.inBand=!this.ghost || Math.abs(this.pos-this.idealPos)<=this.band; this.downSum+=this.inBand?1:0; this.downN++; }
       if(tracked && this.pos<=0.05){
         const upQ=this.upN?this.upSum/this.upN:0, downQ=this.downN?this.downSum/this.downN:0, q=(upQ+downQ)/2;
         this.qSum+=q; this.qN++; this.reps++; this.score+=Math.round(60+40*q);
@@ -70,6 +71,8 @@ class TempoLift {
 
     if(!tracked) this.fb={text:"📷 Show your whole leg to the camera",color:"#ffb84d"};
     else if(this.phase==="start") this.fb={text:"Start bent — extend when ready",color:"#9aa6d4"};
+    else if(!this.ghost && this.phase==="up") this.fb={text:"Extend at your own pace →",color:"#8affc0"};
+    else if(!this.ghost && this.phase==="down") this.fb={text:"Lower slowly and under control ↓",color:"#8affc0"};
     else if(this.phase==="up") this.fb = (this.pos<this.idealPos-this.band) ? {text:"🐢 Push a little faster",color:"#ffb84d"}
       : (this.pos>this.idealPos+this.band) ? {text:"⚡ Ease off — slow down",color:"#ffb84d"} : {text:"On pace — keep extending →",color:"#8affc0"};
     else if(this.phase==="hold") this.fb = this.inBand? {text:"Hold the lock…",color:"#8affc0"} : {text:"Stay locked out at the top!",color:"#ff9ec7"};
@@ -82,7 +85,9 @@ class TempoLift {
     this.result={ completed:true, stars:starsFor(q), score:Math.round(this.score), reps:this.reps, quality:+(q*100).toFixed(0) };
     this.onEvent({type:"end",...this.result}); }
   status(){ let progress=0;
-    if(this.phase==="up") progress=Math.min(1,this.phaseT/this.upSecs);
+    if(!this.ghost && this.phase==="up") progress=this.pos;
+    else if(!this.ghost && this.phase==="down") progress=1-this.pos;
+    else if(this.phase==="up") progress=Math.min(1,this.phaseT/this.upSecs);
     else if(this.phase==="hold") progress=Math.min(1,this.phaseT/this.holdSecs);
     else if(this.phase==="down") progress=Math.min(1,this.phaseT/this.downSecs);
     return { progress, score:Math.round(this.score), reps:this.reps, repsTarget:this.repsTarget, feedback:this.fb, done:this.done, result:this.result }; }
@@ -112,8 +117,10 @@ class TempoLift {
 
     // ghost pacer pin (the prescribed tempo)
     const gyPos = botY - this.idealPos*trackH, pulse=(Math.sin(this.t*4)+1)/2;
-    g.globalAlpha=0.5+0.15*pulse; g.fillStyle="#dfe6ff"; g.beginPath(); g.arc(tx,gyPos,15,0,7); g.fill(); g.globalAlpha=1;
-    g.strokeStyle="#ffffff77"; g.lineWidth=2; g.setLineDash([3,4]); g.beginPath(); g.arc(tx,gyPos,15,0,7); g.stroke(); g.setLineDash([]);
+    if(this.ghost){
+      g.globalAlpha=0.5+0.15*pulse; g.fillStyle="#dfe6ff"; g.beginPath(); g.arc(tx,gyPos,15,0,7); g.fill(); g.globalAlpha=1;
+      g.strokeStyle="#ffffff77"; g.lineWidth=2; g.setLineDash([3,4]); g.beginPath(); g.arc(tx,gyPos,15,0,7); g.stroke(); g.setLineDash([]);
+    }
 
     // weight-stack pin (patient's actual position)
     const col = this.phase==="start" ? "#9aa6d4" : (this.inBand ? "#8affc0" : "#ffb84d");
@@ -122,7 +129,7 @@ class TempoLift {
     g.strokeStyle=col; g.lineWidth=3; g.stroke();
     g.fillStyle=col; g.beginPath(); g.arc(tx,wy,7,0,7); g.fill();
     // off-pace direction arrow
-    if(this.phase!=="start" && !this.inBand){ const behind=(this.phase==="down") ? (this.pos>this.idealPos) : (this.pos<this.idealPos);
+    if(this.ghost && this.phase!=="start" && !this.inBand){ const behind=(this.phase==="down") ? (this.pos>this.idealPos) : (this.pos<this.idealPos);
       g.fillStyle="#ffb84d"; g.font="bold 20px sans-serif"; g.textAlign="center"; g.fillText(behind?"▲ faster":"▼ ease off", tx+50, wy+6); }
 
     // weight plates stacked below the pin, for gym flavor
@@ -137,7 +144,7 @@ class TempoLift {
     const label = this.phase==="start" ? "READY" : this.phase==="up" ? "EXTEND ↑" : this.phase==="hold" ? "HOLD" : "LOWER ↓";
     const target = this.phase==="up" ? this.upSecs : this.phase==="hold" ? this.holdSecs : this.phase==="down" ? this.downSecs : null;
     g.textAlign="left"; g.font="900 26px sans-serif"; g.fillStyle="#eef2ff"; g.fillText(label, 20, H*0.11);
-    if(target!=null){ g.font="bold 14px sans-serif"; g.fillStyle="#9aa6d4"; g.fillText(`${Math.min(this.phaseT,target).toFixed(1)}s / ${target}s`, 20, H*0.11+22); }
+    if(target!=null && (this.ghost || this.phase==="hold")){ g.font="bold 14px sans-serif"; g.fillStyle="#9aa6d4"; g.fillText(`${Math.min(this.phaseT,target).toFixed(1)}s / ${target}s`, 20, H*0.11+22); }
     g.font="11px sans-serif"; g.fillStyle="#9aa6d4"; g.textAlign="right"; g.fillText(`confidence ${Math.round(this.conf*100)}%`, W-20, H*0.11);
 
     { const pw=Math.min(30,(W*0.85)/this.repsTarget);
@@ -164,7 +171,7 @@ class TempoLift {
 export default {
   id:"tempo", name:"Tempo Lift", emoji:"⏱️", exercise:"Resisted Knee Extension", camera:"Sagittal (side-on)",
   howto:"Sit with resistance on your shin (band or ankle weight). Start <b>bent</b>, <b>extend on the beat</b> to lock out, <b>hold briefly</b>, then <b>lower under control</b> — match the ghost pin's pace, don't race it.",
-  calib:"extension", usesHold:false, usesPace:true, diffs:Object.keys(DIFFS),
+  calib:"extension", usesHold:false, usesPace:true, usesGhostToggle:true, diffs:Object.keys(DIFFS),
   // mouse-preview: pointer height → knee angle over a generous arc near extension
   mouseMetrics(p){ const angle=178-p*90; return { tracked:true, conf:1, flex:178-angle, kneeFlex:178-angle, kneeAngle:angle, kneeAngleDisp:angle, hipAngle:150, ankle:{x:.5,y:p}, side:"L" }; },
   make(ctx){ return new TempoLift(ctx); },

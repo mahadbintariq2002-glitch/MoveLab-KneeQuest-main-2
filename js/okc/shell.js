@@ -34,7 +34,9 @@ const REP_PRESETS=[3,5,8,10,15];            // number of reps in the set
 // pace multiplier applied to a paced game's phase timings (e.g. Tempo Lift's ghost dot).
 // >1 = more seconds per phase = a slower dot; <1 = fewer seconds = a faster one.
 const PACE_PRESETS=[ {id:1.5,label:"Slower"}, {id:1.2,label:"Relaxed"}, {id:1,label:"Normal"}, {id:0.8,label:"Brisk"} ];
-const CONF_GATE=0.4;                        // min tracking confidence to accept a frame (low-light friendly)
+const GHOST_PRESETS=[ {id:1,label:"Ghost On"}, {id:0,label:"Ghost Off"} ];   // pacer dot shown / free-pace mode
+let chosenGhost=true;
+const CONF_GATE=0.4;                       // min tracking confidence to accept a frame (low-light friendly)
 let chosenHold=8, chosenReps=5, chosenPace=1, extRef=null; // extRef = patient's calibrated full-extension angle
 
 let W=0,H=0,DPR=1, scene="hub", mode="mouse", running=false, lastTs=0, countUntil=0;
@@ -77,12 +79,19 @@ function openDiff(){ $("diffTitle").textContent=curDef.name; $("diffHow").innerH
   if(usesHold) HOLD_PRESETS.forEach(sec=>{ const el=document.createElement("button"); el.className="pick hold"; el.dataset.id=sec;
     el.style.width="92px"; el.innerHTML=`<div class="pn">${sec}s</div>`; el.onclick=()=>{ chosenHold=sec; sel("hold",sec); Audio.tap&&Audio.tap(); }; hg.appendChild(el); });
   sel("hold",chosenHold);
+  const usesGhostToggle = !!curDef.usesGhostToggle;
+  $("ghostLabel").style.display = usesGhostToggle?"block":"none";
+  const gr=$("ghostRow"); gr.innerHTML=""; gr.style.display = usesGhostToggle?"flex":"none";
+  const applyPaceVis=()=>{ const show=!!curDef.usesPace && (!usesGhostToggle || chosenGhost);   // pace only matters while the ghost is on
+    $("paceLabel").style.display = show?"block":"none"; $("paceRow").style.display = show?"flex":"none"; };
+  if(usesGhostToggle) GHOST_PRESETS.forEach(p=>{ const el=document.createElement("button"); el.className="pick ghost"; el.dataset.id=p.id;
+    el.style.width="110px"; el.innerHTML=`<div class="pn">${p.label}</div>`; el.onclick=()=>{ chosenGhost=!!p.id; sel("ghost",p.id); applyPaceVis(); Audio.tap&&Audio.tap(); }; gr.appendChild(el); });
+  sel("ghost",chosenGhost?1:0);
   const usesPace = !!curDef.usesPace;
-  $("paceLabel").style.display = usesPace?"block":"none";
-  const pg=$("paceRow"); pg.innerHTML=""; pg.style.display = usesPace?"flex":"none";
+  const pg=$("paceRow"); pg.innerHTML="";
   if(usesPace) PACE_PRESETS.forEach(p=>{ const el=document.createElement("button"); el.className="pick pace"; el.dataset.id=p.id;
     el.style.width="92px"; el.innerHTML=`<div class="pn">${p.label}</div>`; el.onclick=()=>{ chosenPace=p.id; sel("pace",p.id); Audio.tap&&Audio.tap(); }; pg.appendChild(el); });
-  sel("pace",chosenPace);
+  sel("pace",chosenPace); applyPaceVis();
   const rg=$("repRow"); rg.innerHTML=""; REP_PRESETS.forEach(n=>{ const el=document.createElement("button"); el.className="pick reps"; el.dataset.id=n;
     el.style.width="92px"; el.innerHTML=`<div class="pn">${n}</div>`; el.onclick=()=>{ chosenReps=n; sel("reps",n); Audio.tap&&Audio.tap(); }; rg.appendChild(el); });
   sel("reps",chosenReps);
@@ -140,7 +149,7 @@ function startGame(){ ended=false; _lastFb=""; _count=-1; showScreen("game"); $(
   say(curDef.name+". "+(curDef.exercise||""), 1.0);
   $("pipWrap").style.display = mode==="camera" ? "block" : "none";
   const er = extRef!=null ? extRef : (pose.m.kneeAngle||178);   // fall back to current straight reading
-  game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, repsTarget:chosenReps, paceMult:chosenPace, extRef:er, audio:Audio, onEvent:onGameEvent });
+  game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, repsTarget:chosenReps, paceMult:chosenPace, ghost:chosenGhost, extRef:er, audio:Audio, onEvent:onGameEvent });
   $("gTitle").textContent=curDef.name;
   countUntil=performance.now()+3000; running=true; lastTs=performance.now(); requestAnimationFrame(loop); }
 
