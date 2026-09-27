@@ -139,6 +139,8 @@ function camLoop(){ if(!camReady || scene!=="calibScreen") return; requestAnimat
   $("calNow").textContent = pose.m.kneeAngleDisp!=null? Math.round(pose.m.kneeAngleDisp)+"°":"—";
   const b=$("calZone");
   if(!anyPose){ b.textContent="📷 No body detected — step back so your whole body is in view"; b.style.color="#ff6f6f"; }
+  else if(!pose.m.bodyOk){ b.textContent="⚠ Only part of you is in frame — step back so your shoulders AND legs are both visible (not just an arm)"; b.style.color="#ff9ec7"; }
+  else if(!pose.m.sideOnOk){ b.textContent="⚠ Turn side-on to the camera — sitting/facing it straight-on can't be read as a knee"; b.style.color="#ff9ec7"; }
   else if(a==null||!good){ b.textContent=`⚠ Weak tracking (${conf}%) — turn side-on, better light, whole leg visible`; b.style.color="#ffb84d"; }
   else if(curDef.calib==="extension"){ b.textContent = extRef!=null ? `✓ Captured ${Math.round(extRef)}° · conf ${conf}%` : `✓ Tracking ${conf}% — straighten & Capture`; b.style.color="#8affc0"; }
   else { b.textContent=`✓ Tracking ${conf}% — ready`; b.style.color="#8affc0"; } }

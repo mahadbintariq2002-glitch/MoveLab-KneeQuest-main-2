@@ -9,6 +9,10 @@ const POSE_MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarke
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/wasm";
 const SH={L:11,R:12}, HIP={L:23,R:24}, KNEE={L:25,R:26}, ANK={L:27,R:28};
 const TRACK_FLOOR=0.35, MED=7, DEADBAND=1.2;
+// Extra gates so a close-up limb (e.g. a straightened arm) or a person sitting
+// square to the camera can't be mistaken for a tracked knee:
+const SHOULDER_FLOOR=0.35;  // both shoulders must be visible — confirms a torso (not just a nearby limb) is actually in frame
+const ASYM_FLOOR=0.12;      // one side's hip-knee-ankle chain must clearly out-read the other — true only in a genuine side-on view; a person facing the camera reads both legs about equally
 
 function median(a){ if(!a.length)return null; const s=[...a].sort((x,y)=>x-y),m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
 
@@ -19,7 +23,7 @@ export class PoseController {
     this.kneeSmooth=new OneEuro(0.5,0.05); this.hipSmooth=new OneEuro(0.5,0.05);   // very steady when held
     this.kneeMed=[]; this.hipMed=[]; this.kneeDisp=null; this.smLandmarks=null;
     this.lastRes=null; this.lastVideoTime=-1; this.zero=0; this.primaryIdx=0;
-    this.m={ tracked:false, conf:0, kneeAngle:null, kneeAngleDisp:null, kneeFlex:null, hipAngle:null, ankle:null, side:null };
+    this.m={ tracked:false, conf:0, kneeAngle:null, kneeAngleDisp:null, kneeFlex:null, hipAngle:null, ankle:null, side:null, bodyOk:false, sideOnOk:false };
   }
   get CONNECTIONS(){ return PoseLandmarker.POSE_CONNECTIONS; }
 
@@ -51,7 +55,10 @@ export class PoseController {
       const cL=Math.min(vis(sm[HIP.L]),vis(sm[KNEE.L]),vis(sm[ANK.L]));
       const cR=Math.min(vis(sm[HIP.R]),vis(sm[KNEE.R]),vis(sm[ANK.R]));
       const side = cL>=cR ? "L":"R"; const conf=Math.max(cL,cR); m.side=side; m.conf=conf;
-      if(conf>=TRACK_FLOOR){
+      const bodyOk = vis(sm[SH.L])>=SHOULDER_FLOOR && vis(sm[SH.R])>=SHOULDER_FLOOR;
+      const sideOnOk = Math.abs(cL-cR)>=ASYM_FLOOR;
+      m.bodyOk=bodyOk; m.sideOnOk=sideOnOk;
+      if(conf>=TRACK_FLOOR && bodyOk && sideOnOk){
         const raw2=angle2d(sm[HIP[side]], sm[KNEE[side]], sm[ANK[side]], asp);
         if(raw2!=null){ this.kneeMed.push(raw2); if(this.kneeMed.length>MED) this.kneeMed.shift();
           const ka=this.kneeSmooth.filt(median(this.kneeMed), t);
