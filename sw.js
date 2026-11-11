@@ -1,6 +1,6 @@
 // sw.js — offline service worker (network-first for app files so updates always
 // load when online; cache-first only for the big static CDN model/wasm).
-const CACHE = "okc-offline-v2";
+const CACHE = "okc-offline-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {
@@ -17,12 +17,13 @@ self.addEventListener("fetch", (e) => {
   const sameOrigin = new URL(req.url).origin === self.location.origin;
 
   if (sameOrigin) {
-    // network-first: always try to get the latest app file; fall back to cache offline
+    // network-first: always try to get the latest app file; fall back to cache offline.
+    // cache:"no-cache" makes the browser REVALIDATE (cheap 304 when unchanged) instead of trusting
+    // its HTTP cache — GitHub Pages sends max-age=600, which otherwise kept stale files for 10 min.
     e.respondWith((async () => {
       try {
-        const res = await fetch(req);
-        const cache = await caches.open(CACHE);
-        cache.put(req, res.clone());
+        const res = await fetch(req, { cache: "no-cache" });
+        if (res.ok) { const cache = await caches.open(CACHE); cache.put(req, res.clone()); }
         return res;
       } catch (err) {
         const hit = await caches.match(req);
