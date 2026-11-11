@@ -11,6 +11,7 @@ import TKE from "./games/tke.js";
 import TEMPO from "./games/tempo.js";
 import HAM from "./games/ham.js";
 import BAL from "./games/balance.js";
+import { Sync, PAIN } from "./sync.js";
 
 const $=id=>document.getElementById(id);
 const stage=$("stage"), sctx=stage.getContext("2d"), video=$("video"), pip=$("pip"), pctx=pip.getContext("2d");
@@ -51,7 +52,7 @@ function resize(){ DPR=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHei
   pip.width=132; pip.height=99; if(game&&game.resize) game.resize(W,H); }
 addEventListener("resize",resize); addEventListener("orientationchange",()=>setTimeout(resize,200));
 
-const SCREENS=["hub","diffScreen","calibScreen","sumScreen","dashScreen"];
+const SCREENS=["hub","diffScreen","painScreen","calibScreen","sumScreen","dashScreen"];
 function showScreen(id){ scene=id; for(const s of SCREENS) $(s).classList.toggle("on", s===id); $("hud").classList.toggle("on", id==="game");
   if(id!=="calibScreen"){ $("calibScreen").classList.remove("preview"); $("framehint").style.display="none"; } }
 function toScene(id){ Audio.tap&&Audio.tap(); showScreen(id); if(id==="hub")refreshHub(); if(id==="dashScreen")renderDash(); }
@@ -64,7 +65,8 @@ function speakCue(text){ if(!text)return; const now=performance.now(); if(now-_s
 function cleanSpeak(t){ return t.replace(/[^\w\s.,!'’-]/g,"").replace(/\s+/g," ").trim(); }
 
 // ── hub ──
-function refreshHub(){ const d=OKCSave.data; $("coinN").textContent=d.coins; $("rankN").textContent="Lv "+rankFor(d.xp); $("streakN").textContent="🔥 "+d.streak; }
+function refreshHub(){ const sc=Sync.context(), chip=$("studyChip"); chip.style.display=sc.studyId?"block":"none"; chip.textContent=sc.studyId?`Participant ${sc.studyId}`:"";
+  const d=OKCSave.data; $("coinN").textContent=d.coins; $("rankN").textContent="Lv "+rankFor(d.xp); $("streakN").textContent="🔥 "+d.streak; }
 function buildHub(){ const g=$("gameGrid"); g.innerHTML=""; let lastGroup=null;
   GAMES.forEach((G,i)=>{ const def=G.def, id=def?def.id:G.id, name=def?def.name:G.name, emoji=def?def.emoji:G.emoji, ex=def?def.exercise:G.exercise;
     const grp=(def&&def.group)||null;                       // games outside the open-chain suite get their own heading
@@ -109,8 +111,50 @@ $("btnPlayHub")&&($("btnPlayHub").onclick=()=>{ Audio.init(); Audio.resume(); Au
 $("btnDash").onclick=()=>toScene("dashScreen");
 $("btnDashBack").onclick=()=>toScene("hub");
 $("btnDiffBack").onclick=()=>toScene("hub");
-$("btnDiffNext").onclick=()=>{ Audio.init(); Audio.resume(); openCalib(); };
-$("btnPause").onclick=()=>{ running=false; pose.stop(); camReady=false; Audio.stopMusic(); toScene("hub"); };
+$("btnDiffNext").onclick=()=>{ Audio.init(); Audio.resume(); beginSession(); };
+$("btnPause").onclick=()=>{
+  if(Sync.active && game && sess && !ended && running) Sync.submit(sessionRecord(game.status(), "abandoned", null));   // keep partial sessions for adherence analysis
+  running=false; pose.stop(); camReady=false; Audio.stopMusic(); toScene("hub"); };
+
+// ── study participants: pain check before / after each session (0–10), session record hand-off ──
+let painBefore=null, sess=null;
+const r1=v=>v==null?null:Math.round(v*10)/10;
+function beginSession(){
+  if(!Sync.active){ openCalib(); return; }                       // anonymous visitor: flow unchanged
+  openPain("before",(n,skip)=>{ painBefore=n;
+    if(skip){ sess={ t0:performance.now(), wall0:Date.now() }; Sync.submit(sessionRecord({reps:0,score:0,stars:0,completed:false},"skipped_pain",null)); sess=null; toScene("hub"); }
+    else openCalib(); }); }
+function openPain(kind, done){
+  $("painTitle").textContent = kind==="before" ? "How is your knee pain right now?" : "How does your knee feel now?";
+  $("painSub").textContent = kind==="before" ? "Before we start — tap a number." : "After the exercise — tap a number.";
+  $("painAdvice").style.display="none";
+  const g=$("painGrid"); g.innerHTML="";
+  for(let n=0;n<=10;n++){ const el=document.createElement("button"); el.className="pick"; el.style.width="64px"; el.style.padding="12px 0";
+    el.innerHTML=`<div class="pn" style="margin:0;font-size:20px">${n}</div>`; el.onclick=()=>{ Audio.tap&&Audio.tap(); painChosen(kind,n,done); }; g.appendChild(el); }
+  showScreen("painScreen"); }
+function painChosen(kind,n,done){
+  if(n < (kind==="before"?PAIN.adviseBefore:PAIN.adviseAfter)){ done(n,false); return; }
+  $("painAdviceText").textContent = kind==="before"
+    ? `Your pain is ${n}/10 today. It is safest to skip this exercise and tell your therapist.`
+    : `Your pain is ${n}/10. Please rest, and tell your therapist how you feel.`;
+  $("painSkip").style.display = kind==="before" ? "inline-flex" : "none";
+  $("painGo").textContent = kind==="before" ? "Continue anyway" : "OK";
+  $("painAdvice").style.display="block";
+  $("painGo").onclick=()=>done(n,false); $("painSkip").onclick=()=>done(n,true); }
+function trackSession(m){                                          // peak knee angles / balance shift across the session
+  if(!sess || !m || !m.tracked) return;
+  if(m.kneeAngle!=null){ sess.minAng = sess.minAng==null ? m.kneeAngle : Math.min(sess.minAng,m.kneeAngle); sess.maxAng = sess.maxAng==null ? m.kneeAngle : Math.max(sess.maxAng,m.kneeAngle); }
+  if(m.bal && m.bal.ok){ const sh=m.bal.shift-(balRef?balRef.shift0:0); sess.balL = sess.balL==null?sh:Math.max(sess.balL,sh); sess.balR = sess.balR==null?sh:Math.min(sess.balR,sh); } }
+function sessionRecord(r, status, painAfter){
+  const s=sess||{}, d=curDef;
+  return { type:"session", status, game:d.id, gameName:d.name, exercise:d.exercise, difficulty:chosenDiff,
+    repsTarget: game?game.repsTarget:chosenReps, repsDone:r.reps||0, completed:!!r.completed, stars:r.stars||0, score:r.score||0, qualityPct: r.quality==null?null:r.quality,
+    durationSec: s.t0?Math.round((performance.now()-s.t0)/1000):null,
+    holdSecs: d.usesHold!==false?chosenHold:null, paceMult: d.usesPace?chosenPace:null, ghost: d.usesGhostToggle?chosenGhost:null,
+    inputMode: mode, extRefDeg:r1(s.extRef), kneeAngleMinDeg:r1(s.minAng), kneeAngleMaxDeg:r1(s.maxAng),
+    peakFlexionDeg: (s.minAng!=null&&s.extRef!=null)?r1(Math.max(0,s.extRef-s.minAng)):null,
+    balShiftMaxLeft:r1(s.balL), balShiftMaxRight:r1(s.balR),
+    painBefore, painAfter, startedAt:s.wall0?new Date(s.wall0).toISOString():null, endedAt:new Date().toISOString() }; }
 $("btnMute").onclick=()=>{ const m=!OKCSave.data.settings.muted; OKCSave.data.settings.muted=m; OKCSave.save(); Audio.setMuted(m); $("btnMute").textContent=m?"🔇":"🔊"; };
 $("btnMute").textContent=OKCSave.data.settings.muted?"🔇":"🔊"; Audio.setMuted(OKCSave.data.settings.muted);
 
@@ -138,6 +182,7 @@ function openCalib(){ showScreen("calibScreen"); $("calibScreen").classList.remo
       $("calHint").innerHTML = denied
         ? "⚠ Camera blocked. Tap <b>Play with camera</b> again and choose <b>Allow</b>. On a phone use Chrome/Safari (an embedded preview can't use the camera)."
         : "Camera error: "+(e.message||e); } };
+  $("calMouse").style.display = Sync.context().source==="android" ? "none" : "";   // in the patient app only the camera counts
   $("calMouse").onclick=()=>{ mode="mouse"; $("pipWrap").style.display="none"; startGame(); };
   $("calSet").onclick=()=>{
     if(curDef.calib==="balance"){ const bl=pose.m.bal;
@@ -186,6 +231,7 @@ function startGame(){ ended=false; _lastFb=""; _count=-1; showScreen("game"); $(
   const er = extRef!=null ? extRef : (pose.m.kneeAngle||178);   // fall back to current straight reading
   game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, repsTarget:chosenReps, paceMult:chosenPace, ghost:chosenGhost, extRef:er, balRef, audio:Audio, onEvent:onGameEvent });
   $("gTitle").textContent=curDef.name;
+  sess={ t0:performance.now(), wall0:Date.now(), extRef:er, minAng:null, maxAng:null, balL:null, balR:null };
   countUntil=performance.now()+3000; running=true; lastTs=performance.now(); requestAnimationFrame(loop); }
 
 function onGameEvent(e){
@@ -205,7 +251,7 @@ function loop(now){ if(!running) return; requestAnimationFrame(loop);
   renderBg(now);
   if(now<countUntil){ const c=Math.ceil((countUntil-now)/1000); $("countbig").style.display="flex"; $("countbig").textContent=c;
     if(c!==_count){ _count=c; Audio.tap&&Audio.tap(); say(String(c),1.1); } }
-  else { $("countbig").style.display="none"; if(_count!==0){ _count=0; say("Go!",1.1); } if(game&&!game.done) game.update(dt,m,now); }
+  else { $("countbig").style.display="none"; if(_count!==0){ _count=0; say("Go!",1.1); } if(game&&!game.done){ game.update(dt,m,now); trackSession(m); } }
   if(game) game.render(sctx,now);
   if(mode==="camera") pose.drawScene(pctx,pip.width,pip.height);
   const s=game?game.status():null; if(s){ updateHUD(s);
@@ -223,6 +269,9 @@ function updateHUD(s){ $("progBar").style.width=Math.round(s.progress*100)+"%"; 
 
 // ── summary + progression ──
 function endGame(r){ running=false; pose.stop(); camReady=false; Audio.stopMusic(); Audio.victory&&Audio.victory();
+  if(Sync.active) openPain("after", n=>finishSession(r,n)); else finishSession(r,null); }   // study participants rate their pain first
+function finishSession(r, painAfter){
+  if(Sync.active){ Sync.submit(sessionRecord(r, r.completed?"completed":"ended", painAfter)); sess=null; }
   setTimeout(()=>say(r.completed?"Exercise complete. Great job!":"Session ended."),300);
   const xp = r.completed? 40 + r.stars*30 + Math.round((r.quality||0)/3) : 15;
   const coins = r.completed? 15 + r.stars*10 : 5;
@@ -247,7 +296,7 @@ function showSummary(r,xp,coins,streak,newAch){ showScreen("sumScreen");
     <div class="crow"><span>Day streak</span><b>🔥 ${streak}</b></div>`;
   $("sumAch").textContent = newAch.length? "🏅 "+newAch.join(", ") : "";
 }
-$("btnReplay").onclick=()=>{ Audio.startMusic(); openCalib(); };
+$("btnReplay").onclick=()=>{ Audio.startMusic(); beginSession(); };
 $("btnSumHome").onclick=()=>toScene("hub");
 
 // ── dashboard ──
@@ -276,5 +325,5 @@ resize(); buildHub(); refreshHub(); showScreen("hub");
 window.__okc={ scene:()=>scene,
   openGame:(id,hold,reps)=>{ const G=GAMES.find(g=>g.def&&g.def.id===id); curDef=(G&&G.def)||QUAD; chosenDiff="gentle"; if(hold)chosenHold=hold; if(reps)chosenReps=reps; mode="mouse"; startGame(); },
   forcePlay:()=>{countUntil=0;}, setPointer:(v,x)=>{pointerNorm=v; if(x!=null)pointerNormX=x;},
-  step:(dt)=>{ if(!game)return; game.update(dt||0.05, mouseMetricsFor(pointerNorm, pointerNormX), performance.now()); },
+  step:(dt)=>{ if(!game)return; const mm=mouseMetricsFor(pointerNorm, pointerNormX); game.update(dt||0.05, mm, performance.now()); trackSession(mm); },
   status:()=>game?game.status():null };

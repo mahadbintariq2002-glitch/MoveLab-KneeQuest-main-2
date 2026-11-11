@@ -82,6 +82,7 @@
   <div class="hero">🦵</div>
   <h1>OKC REHAB GAMES</h1>
   <p class="sub">Open Kinetic Chain knee exercises — as games. Your knee movement is the controller.</p>
+  <p class="sub" id="studyChip" style="display:none;color:var(--gold);font-weight:800;margin-top:-6px"></p>
   <div class="grid" id="gameGrid"></div>
   <div class="row"><button class="btn ghost" id="btnDash">📊 Progress</button></div>
   <div class="row"><a class="link" href="index.html">📈 Tracker</a><a class="link" href="arcade.html">🔮 Crystal Guardian</a></div>
@@ -101,6 +102,18 @@
   <h2 style="font-size:19px;margin-top:6px">Number of reps</h2>
   <div class="grid" id="repRow"></div>
   <div class="row"><button class="btn big gold" id="btnDiffNext">Start ▶</button><button class="btn ghost" id="btnDiffBack">← Back</button></div>
+</section>
+
+<!-- PAIN CHECK (study participants only: shown before and after each session) -->
+<section class="screen" id="painScreen">
+  <h2 id="painTitle">Pain check</h2>
+  <p class="sub" id="painSub"></p>
+  <div class="grid" id="painGrid" style="max-width:520px"></div>
+  <p class="sub" style="font-size:13px">0 = no pain &nbsp;·&nbsp; 10 = worst pain imaginable</p>
+  <div class="card" id="painAdvice" style="display:none;text-align:center">
+    <p id="painAdviceText" style="font-weight:800;margin:0 0 12px"></p>
+    <div class="row"><button class="btn gold" id="painSkip">Skip today</button><button class="btn ghost" id="painGo">Continue anyway</button></div>
+  </div>
 </section>
 
 <!-- CALIBRATE -->
