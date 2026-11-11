@@ -37,6 +37,7 @@
   .pick:hover{transform:translateY(-3px)} .pick.sel{border-color:var(--gold);box-shadow:0 0 0 3px #ffe08a44,0 10px 24px #0006}
   .pick .emoji{font-size:46px;line-height:1} .pick .pn{font-size:16px;font-weight:800;margin-top:6px} .pick .pd{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.35}
   .pick .stars{color:var(--gold);font-size:15px;margin-top:6px} .pick.locked{opacity:.5} .pick .soon{margin-top:6px;font-size:11px;font-weight:800;color:var(--amber)}
+  .grouphead{flex-basis:100%;text-align:center;margin-top:12px;font-size:13px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;max-width:480px;width:100%}
   /* HUD */
   #hud{position:fixed;inset:0;z-index:8;display:none;pointer-events:none} #hud.on{display:block}
@@ -45,7 +46,7 @@
   .bar{flex:1;height:16px;border-radius:9px;background:#ffffff1c;overflow:hidden;border:1px solid var(--line)} .bar>i{display:block;height:100%;border-radius:9px;transition:width .1s;background:linear-gradient(90deg,#ffe08a,#8affc0)}
   #hudR{font-size:15px;font-weight:800;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:6px 12px}
   #btnPause{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;pointer-events:auto;min-width:56px}
-  #fbBanner{position:absolute;left:50%;bottom:11%;transform:translateX(-50%);font-size:24px;font-weight:900;background:#000c;border:2px solid var(--line);border-radius:24px;padding:12px 24px;opacity:0;transition:opacity .2s;text-align:center;max-width:94vw;text-shadow:0 2px 6px #000}
+  #fbBanner{position:absolute;left:50%;bottom:11%;transform:translateX(-50%);font-size:24px;font-weight:900;background:#000c;border:2px solid var(--line);border-radius:24px;padding:12px 24px;opacity:0;transition:opacity .2s;text-align:center;width:max-content;max-width:94vw;text-shadow:0 2px 6px #000}
   /* games whose main visual sits bottom-center (e.g. Trace the Arc's rainbow) move the cue banner up top instead, so it doesn't box over the scene */
   #hud.fbTop #fbBanner{bottom:auto;top:60px}
   #video{position:fixed;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;left:0;top:0}  /* hidden capture source; drawn to canvas */
@@ -109,7 +110,7 @@
   <div class="spinner" id="spin"></div>
   <p class="sub" id="calHint"></p>
   <div id="calBody" style="display:none;width:100%;max-width:480px">
-    <div class="card" style="text-align:center"><div style="color:var(--muted);font-size:13px">YOUR KNEE (from straight)</div>
+    <div class="card" style="text-align:center"><div id="calLabel" style="color:var(--muted);font-size:13px">YOUR KNEE (from straight)</div>
       <div id="calNow" style="font-size:44px;font-weight:900;color:var(--cyan)">—</div>
       <div id="calZone" style="font-size:15px;font-weight:800;min-height:22px">Sit side-on, whole leg visible</div></div>
     <p class="sub" id="calSteps2">1) Straighten your leg → tap <b>Set 0°</b>. &nbsp; 2) <b>Start</b>.</p>

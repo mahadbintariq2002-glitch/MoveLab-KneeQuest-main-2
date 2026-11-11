@@ -10,6 +10,7 @@ import HEEL from "./games/heel.js";
 import TKE from "./games/tke.js";
 import TEMPO from "./games/tempo.js";
 import HAM from "./games/ham.js";
+import BAL from "./games/balance.js";
 
 const $=id=>document.getElementById(id);
 const stage=$("stage"), sctx=stage.getContext("2d"), video=$("video"), pip=$("pip"), pctx=pip.getContext("2d");
@@ -22,6 +23,7 @@ const GAMES=[
   { def:TKE },
   { def:TEMPO },
   { def:HAM },
+  { def:BAL },        // static balance — a closed-chain category, shown under its own heading
 ];
 const DIFFS=[
   { id:"gentle",  name:"Gentle",  desc:"Wide zone, short holds. Best to start." },
@@ -38,9 +40,10 @@ const GHOST_PRESETS=[ {id:1,label:"Ghost On"}, {id:0,label:"Ghost Off"} ];   // 
 let chosenGhost=true;
 const CONF_GATE=0.4;                       // min tracking confidence to accept a frame (low-light friendly)
 let chosenHold=8, chosenReps=5, chosenPace=1, extRef=null; // extRef = patient's calibrated full-extension angle
+let balRef=null;                                            // balRef = patient's calibrated neutral stance (front-view balance game)
 
 let W=0,H=0,DPR=1, scene="hub", mode="mouse", running=false, lastTs=0, countUntil=0;
-let curDef=null, chosenDiff="gentle", game=null, ended=false, pointerNorm=0.5;
+let curDef=null, chosenDiff="gentle", game=null, ended=false, pointerNorm=0.5, pointerNormX=0.5;
 const pose=new PoseController(); let camReady=false;
 
 function resize(){ DPR=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHeight;
@@ -62,8 +65,11 @@ function cleanSpeak(t){ return t.replace(/[^\w\s.,!'’-]/g,"").replace(/\s+/g,"
 
 // ── hub ──
 function refreshHub(){ const d=OKCSave.data; $("coinN").textContent=d.coins; $("rankN").textContent="Lv "+rankFor(d.xp); $("streakN").textContent="🔥 "+d.streak; }
-function buildHub(){ const g=$("gameGrid"); g.innerHTML="";
+function buildHub(){ const g=$("gameGrid"); g.innerHTML=""; let lastGroup=null;
   GAMES.forEach((G,i)=>{ const def=G.def, id=def?def.id:G.id, name=def?def.name:G.name, emoji=def?def.emoji:G.emoji, ex=def?def.exercise:G.exercise;
+    const grp=(def&&def.group)||null;                       // games outside the open-chain suite get their own heading
+    if(i>0 && grp!==lastGroup && grp){ const h=document.createElement("div"); h.className="grouphead"; h.textContent=grp; g.appendChild(h); }
+    lastGroup=grp;
     const best=OKCSave.best(id); const el=document.createElement("button"); el.className="pick game"+(G.soon?" locked":"");
     el.innerHTML=`<div class="emoji">${emoji}</div><div class="pn">${i+1}. ${name}</div><div class="pd">${ex}</div>`+
       (G.soon?`<div class="soon">Coming soon</div>`:`<div class="stars">${"★".repeat(best.bestStars)}${"☆".repeat(3-best.bestStars)}</div>`);
@@ -110,15 +116,22 @@ $("btnMute").textContent=OKCSave.data.settings.muted?"🔇":"🔊"; Audio.setMut
 
 function openCalib(){ showScreen("calibScreen"); $("calibScreen").classList.remove("preview"); $("framehint").style.display="none";
   $("calCamRow").style.display="flex"; $("calBody").style.display="none"; $("spin").style.display="none"; $("pipWrap").style.display="none";
-  extRef=null;
-  const ext = curDef.calib==="extension";
-  $("calHint").textContent="Sit or lie side-on with your WHOLE BODY in view (head to feet), ~2 m back, in good light. The tracker needs to see your body — not just the leg.";
+  extRef=null; balRef=null;
+  const ext = curDef.calib==="extension", balc = curDef.calib==="balance", front = curDef.view==="front";
+  pose.setView(front?"front":"side");               // front = standing balance (person faces the camera); side = knee-angle games
+  $("calLabel").textContent = front ? "WEIGHT ON EACH LEG (estimate)" : "YOUR KNEE (from straight)";
+  $("calZone").textContent = front ? "Stand facing the camera, whole body in view" : "Sit side-on, whole leg visible";
+  $("framehint").textContent = front ? "Stand facing the camera — head to feet in the frame" : "Get your whole body side-on in the frame (head to feet)";
+  $("calHint").textContent = front
+    ? "Stand FACING the camera, ~2.5 m back, feet shoulder-width apart on a firm, flat floor, in good light. Keep a counter or sturdy chair within reach."
+    : "Sit or lie side-on with your WHOLE BODY in view (head to feet), ~2 m back, in good light. The tracker needs to see your body — not just the leg.";
   $("calCam").onclick=async()=>{ mode="camera"; $("calCamRow").style.display="none"; $("spin").style.display="block";
     try{ await pose.load(t=>$("calHint").textContent=t); await pose.startCamera(video); camReady=true; running=true; camLoop();
       $("spin").style.display="none"; $("calBody").style.display="block"; $("pipWrap").style.display="none"; $("calHint").textContent="";
-      $("calSet").style.display = ext?"inline-flex":"none"; $("calSet").textContent = ext?"🎯 Capture extension":"🎯 Set 0°";
+      $("calSet").style.display = (ext||balc)?"inline-flex":"none"; $("calSet").textContent = ext?"🎯 Capture extension":balc?"🎯 Set centre":"🎯 Set 0°";
       $("calSteps2").innerHTML = ext
         ? "Position your leg, then <b>straighten fully</b> & tap <b>Capture</b>, then <b>Start</b>."
+        : balc ? "Stand tall with your weight <b>even on both feet</b>, then tap <b>Set centre</b>, then <b>Start</b>."
         : "Position your leg in the frame, then press <b>Start</b>."; }
     catch(e){ $("spin").style.display="none"; $("calCamRow").style.display="flex";
       const denied=/denied|permission|NotAllowed/i.test(e.name+e.message);
@@ -126,7 +139,11 @@ function openCalib(){ showScreen("calibScreen"); $("calibScreen").classList.remo
         ? "⚠ Camera blocked. Tap <b>Play with camera</b> again and choose <b>Allow</b>. On a phone use Chrome/Safari (an embedded preview can't use the camera)."
         : "Camera error: "+(e.message||e); } };
   $("calMouse").onclick=()=>{ mode="mouse"; $("pipWrap").style.display="none"; startGame(); };
-  $("calSet").onclick=()=>{ if(pose.m.kneeAngle!=null && pose.m.tracked){ extRef=pose.m.kneeAngle; toast("Captured full extension: "+Math.round(extRef)+"°"); }
+  $("calSet").onclick=()=>{
+    if(curDef.calib==="balance"){ const bl=pose.m.bal;
+      if(bl && bl.ok && bl.stanceOk){ balRef={ shift0:bl.shift, trunk0:bl.trunkLean, dyN0:bl.dyN }; toast("Centre set — this is your even-weight position"); }
+      else toast("Face the camera, stand tall, feet shoulder-width apart first"); return; }
+    if(pose.m.kneeAngle!=null && pose.m.tracked){ extRef=pose.m.kneeAngle; toast("Captured full extension: "+Math.round(extRef)+"°"); }
     else toast("Straighten your leg in view first"); };
   $("calGo").onclick=startGame;
 }
@@ -134,6 +151,7 @@ function openCalib(){ showScreen("calibScreen"); $("calibScreen").classList.remo
 function camLoop(){ if(!camReady || scene!=="calibScreen") return; requestAnimationFrame(camLoop); const now=performance.now(); pose.frame(now);
   $("calibScreen").classList.add("preview"); $("framehint").style.display="block";
   pose.drawScene(sctx, W, H);                       // full-screen live camera + skeleton
+  if(curDef.view==="front"){ camLoopFront(); return; }
   const a=pose.m.kneeAngle, conf=Math.round((pose.m.conf||0)*100), good=pose.m.tracked && (pose.m.conf||0)>=CONF_GATE;
   const anyPose = !!(pose.lastRes && pose.lastRes.landmarks && pose.lastRes.landmarks.length);
   $("calNow").textContent = pose.m.kneeAngleDisp!=null? Math.round(pose.m.kneeAngleDisp)+"°":"—";
@@ -145,13 +163,28 @@ function camLoop(){ if(!camReady || scene!=="calibScreen") return; requestAnimat
   else if(curDef.calib==="extension"){ b.textContent = extRef!=null ? `✓ Captured ${Math.round(extRef)}° · conf ${conf}%` : `✓ Tracking ${conf}% — straighten & Capture`; b.style.color="#8affc0"; }
   else { b.textContent=`✓ Tracking ${conf}% — ready`; b.style.color="#8affc0"; } }
 
+// calibration read-out for front-view (standing balance) games
+function camLoopFront(){
+  const bl=pose.m.bal, conf=Math.round((pose.m.conf||0)*100), b=$("calZone");
+  const anyPose = !!(pose.lastRes && pose.lastRes.landmarks && pose.lastRes.landmarks.length);
+  if(bl && bl.ok){ const s=bl.shift-(balRef?balRef.shift0:0), wl=Math.round(100*Math.max(0,Math.min(1,0.5+0.5*s)));
+    $("calNow").textContent=`L ${wl}% · R ${100-wl}%`; } else $("calNow").textContent="—";
+  if(!anyPose){ b.textContent="📷 No body detected — step back so your whole body is in view"; b.style.color="#ff6f6f"; }
+  else if(!bl || !bl.bodyOk){ b.textContent="⚠ Step back — your whole body, head to feet, must be in view"; b.style.color="#ff9ec7"; }
+  else if(!bl.frontOk){ b.textContent="↻ Face the camera — stand square-on to it"; b.style.color="#ff9ec7"; }
+  else if(!bl.standingOk){ b.textContent="🧍 Stand up — this game is done standing"; b.style.color="#ff9ec7"; }
+  else if(!bl.stanceOk){ b.textContent="↔ Feet shoulder-width apart please"; b.style.color="#ffb84d"; }
+  else if(balRef){ b.textContent=`✓ Centre set · conf ${conf}%`; b.style.color="#8affc0"; }
+  else { b.textContent=`✓ Tracking ${conf}% — stand tall, weight even, then tap Set centre`; b.style.color="#8affc0"; }
+}
+
 function startGame(){ ended=false; _lastFb=""; _count=-1; showScreen("game"); $("hud").classList.add("on");
   $("hud").classList.toggle("fbTop", !!curDef.hudFeedbackTop);
   $("calibScreen").classList.remove("preview"); $("framehint").style.display="none";
   say(curDef.name+". "+(curDef.exercise||""), 1.0);
   $("pipWrap").style.display = mode==="camera" ? "block" : "none";
   const er = extRef!=null ? extRef : (pose.m.kneeAngle||178);   // fall back to current straight reading
-  game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, repsTarget:chosenReps, paceMult:chosenPace, ghost:chosenGhost, extRef:er, audio:Audio, onEvent:onGameEvent });
+  game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, repsTarget:chosenReps, paceMult:chosenPace, ghost:chosenGhost, extRef:er, balRef, audio:Audio, onEvent:onGameEvent });
   $("gTitle").textContent=curDef.name;
   countUntil=performance.now()+3000; running=true; lastTs=performance.now(); requestAnimationFrame(loop); }
 
@@ -159,7 +192,7 @@ function onGameEvent(e){
   if(e.type==="rep"){ say("Rep "+e.reps); _spokeAt=performance.now(); }
   if(e.type==="end" && !ended){ ended=true; running=false; endGame(e); } }
 // per-game mouse-preview metrics (falls back to a knee-flex mapping)
-function mouseMetricsFor(p){ return (curDef&&curDef.mouseMetrics) ? curDef.mouseMetrics(p)
+function mouseMetricsFor(p,px){ return (curDef&&curDef.mouseMetrics) ? curDef.mouseMetrics(p,px)
   : { tracked:true, conf:1, flex:p*90, kneeFlex:p*90, kneeAngle:180-p*90, hipAngle:150, ankle:{x:.5,y:p}, side:"L" }; }
 
 // ── main loop ──
@@ -168,7 +201,7 @@ function loop(now){ if(!running) return; requestAnimationFrame(loop);
   let m;
   if(mode==="camera"){ m=pose.frame(now); if(m.tracked && (m.conf||0)<CONF_GATE) m.tracked=false;  // require high confidence
     m.flex = (m.tracked && m.kneeFlex!=null)? (m.kneeFlex - pose.zero) : null; }
-  else { m=mouseMetricsFor(pointerNorm); }
+  else { m=mouseMetricsFor(pointerNorm, pointerNormX); }
   renderBg(now);
   if(now<countUntil){ const c=Math.ceil((countUntil-now)/1000); $("countbig").style.display="flex"; $("countbig").textContent=c;
     if(c!==_count){ _count=c; Audio.tap&&Audio.tap(); say(String(c),1.1); } }
@@ -234,7 +267,7 @@ function renderDash(){ const d=OKCSave.data;
   else { cx.fillStyle="#9aa6d4"; cx.font="12px sans-serif"; cx.fillText("No sessions yet — play Quad Press!",8,60); } }
 
 // pointer control
-function ptr(e){ const y=(e.touches?e.touches[0].clientY:e.clientY); pointerNorm=Math.max(0,Math.min(1,y/H)); }
+function ptr(e){ const t=e.touches?e.touches[0]:e, y=t.clientY, x=t.clientX; pointerNorm=Math.max(0,Math.min(1,y/H)); pointerNormX=Math.max(0,Math.min(1,x/W)); }
 stage.addEventListener("mousemove",ptr); stage.addEventListener("touchmove",e=>{ptr(e);e.preventDefault();},{passive:false}); stage.addEventListener("touchstart",ptr);
 
 // boot
@@ -242,6 +275,6 @@ resize(); buildHub(); refreshHub(); showScreen("hub");
 // test hook
 window.__okc={ scene:()=>scene,
   openGame:(id,hold,reps)=>{ const G=GAMES.find(g=>g.def&&g.def.id===id); curDef=(G&&G.def)||QUAD; chosenDiff="gentle"; if(hold)chosenHold=hold; if(reps)chosenReps=reps; mode="mouse"; startGame(); },
-  forcePlay:()=>{countUntil=0;}, setPointer:v=>{pointerNorm=v;},
-  step:(dt)=>{ if(!game)return; game.update(dt||0.05, mouseMetricsFor(pointerNorm), performance.now()); },
+  forcePlay:()=>{countUntil=0;}, setPointer:(v,x)=>{pointerNorm=v; if(x!=null)pointerNormX=x;},
+  step:(dt)=>{ if(!game)return; game.update(dt||0.05, mouseMetricsFor(pointerNorm, pointerNormX), performance.now()); },
   status:()=>game?game.status():null };
