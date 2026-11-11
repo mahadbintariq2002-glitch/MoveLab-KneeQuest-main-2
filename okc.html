@@ -15,6 +15,8 @@
   .screen{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;overflow:auto;
     background:linear-gradient(135deg,#141a44,#25184f 55%,#3f1f56)}
   .screen.on{display:flex;animation:fade .35s ease}
+  /* centre when there is room, scroll from the TOP when there is not (plain justify-content:center clips the top on small screens) */
+  .screen{justify-content:flex-start} .screen>:first-child{margin-top:auto} .screen>:last-child{margin-bottom:auto} #hub{padding-top:58px} #hub>.hero{margin-top:auto}
   .screen::before{content:"";position:fixed;inset:-20%;z-index:-1;background:
     radial-gradient(circle at 20% 20%,#37e1ff22,transparent 40%),radial-gradient(circle at 80% 30%,#ff6fae22,transparent 40%),radial-gradient(circle at 50% 90%,#8affc022,transparent 45%);animation:drift 15s ease-in-out infinite alternate}
   @keyframes drift{to{transform:translate(-4%,-3%) scale(1.08)}}
@@ -69,6 +71,8 @@
   .spinner{width:36px;height:36px;border:3px solid #ffffff20;border-top-color:var(--cyan);border-radius:50%;animation:spin 1s linear infinite;display:none} @keyframes spin{to{transform:rotate(360deg)}}
   a.link{color:var(--muted);text-decoration:none;font-size:13px}
 </style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=swap">
+<style>[dir=rtl] body,[dir=rtl] button,[dir=rtl] input{font-family:"Noto Naskh Arabic","Segoe UI",Tahoma,system-ui,sans-serif}[dir=rtl] .hud,[dir=rtl] #hudTop{direction:ltr}</style>
 </head>
 <body>
 <canvas id="stage"></canvas>
@@ -78,14 +82,14 @@
 
 <!-- HUB -->
 <section class="screen" id="hub">
-  <div class="topchips"><span class="chip" id="coinN">0</span><span class="chip" id="rankN">Lv 1</span><span class="chip" id="streakN">🔥 0</span><span class="chip" id="btnMute" style="cursor:pointer">🔊</span></div>
+  <div class="topchips"><span class="chip" id="coinN">0</span><span class="chip" id="rankN">Lv 1</span><span class="chip" id="streakN">🔥 0</span><span class="chip" id="btnMute" style="cursor:pointer">🔊</span><span class="chip" id="btnLang" style="cursor:pointer">اردو</span></div>
   <div class="hero">🦵</div>
-  <h1>OKC REHAB GAMES</h1>
-  <p class="sub">Open Kinetic Chain knee exercises — as games. Your knee movement is the controller.</p>
+  <h1 data-t>OKC REHAB GAMES</h1>
+  <p class="sub" data-t>Open Kinetic Chain knee exercises — as games. Your knee movement is the controller.</p>
   <p class="sub" id="studyChip" style="display:none;color:var(--gold);font-weight:800;margin-top:-6px"></p>
   <div class="grid" id="gameGrid"></div>
-  <div class="row"><button class="btn ghost" id="btnDash">📊 Progress</button></div>
-  <div class="row"><a class="link" href="index.html">📈 Tracker</a><a class="link" href="arcade.html">🔮 Crystal Guardian</a></div>
+  <div class="row"><button class="btn ghost" id="btnDash" data-t>📊 Progress</button></div>
+  <div class="row" id="extraLinks"><a class="link" href="index.html" data-t>📈 Tracker</a><a class="link" href="arcade.html" data-t>🔮 Crystal Guardian</a></div>
 </section>
 
 <!-- DIFFICULTY -->
@@ -93,15 +97,15 @@
   <h2 id="diffTitle">Game</h2>
   <p class="sub" id="diffHow"></p>
   <div class="grid" id="diffGrid"></div>
-  <h2 id="holdLabel" style="font-size:19px;margin-top:6px">Hold time (seconds)</h2>
+  <h2 id="holdLabel" data-t style="font-size:19px;margin-top:6px">Hold time (seconds)</h2>
   <div class="grid" id="holdRow"></div>
-  <h2 id="ghostLabel" style="font-size:19px;margin-top:6px">Ghost dot</h2>
+  <h2 id="ghostLabel" data-t style="font-size:19px;margin-top:6px">Ghost dot</h2>
   <div class="grid" id="ghostRow"></div>
-  <h2 id="paceLabel" style="font-size:19px;margin-top:6px">Ghost dot pace</h2>
+  <h2 id="paceLabel" data-t style="font-size:19px;margin-top:6px">Ghost dot pace</h2>
   <div class="grid" id="paceRow"></div>
-  <h2 style="font-size:19px;margin-top:6px">Number of reps</h2>
+  <h2 data-t style="font-size:19px;margin-top:6px">Number of reps</h2>
   <div class="grid" id="repRow"></div>
-  <div class="row"><button class="btn big gold" id="btnDiffNext">Start ▶</button><button class="btn ghost" id="btnDiffBack">← Back</button></div>
+  <div class="row"><button class="btn big gold" id="btnDiffNext" data-t>Start ▶</button><button class="btn ghost" id="btnDiffBack" data-t>← Back</button></div>
 </section>
 
 <!-- PAIN CHECK (study participants only: shown before and after each session) -->
@@ -109,25 +113,25 @@
   <h2 id="painTitle">Pain check</h2>
   <p class="sub" id="painSub"></p>
   <div class="grid" id="painGrid" style="max-width:520px"></div>
-  <p class="sub" style="font-size:13px">0 = no pain &nbsp;·&nbsp; 10 = worst pain imaginable</p>
+  <p class="sub" data-t style="font-size:13px">0 = no pain · 10 = worst pain imaginable</p>
   <div class="card" id="painAdvice" style="display:none;text-align:center">
     <p id="painAdviceText" style="font-weight:800;margin:0 0 12px"></p>
-    <div class="row"><button class="btn gold" id="painSkip">Skip today</button><button class="btn ghost" id="painGo">Continue anyway</button></div>
+    <div class="row"><button class="btn gold" id="painSkip" data-t>Skip today</button><button class="btn ghost" id="painGo">Continue anyway</button></div>
   </div>
 </section>
 
 <!-- CALIBRATE -->
 <section class="screen" id="calibScreen">
-  <h2>Get ready</h2>
-  <div class="row" id="calCamRow"><button class="btn big gold" id="calCam">📷 Play with camera</button><button class="btn" id="calMouse">🖱 Preview with mouse</button></div>
+  <h2 data-t>Get ready</h2>
+  <div class="row" id="calCamRow"><button class="btn big gold" id="calCam" data-t>📷 Play with camera</button><button class="btn" id="calMouse" data-t>🖱 Preview with mouse</button></div>
   <div class="spinner" id="spin"></div>
   <p class="sub" id="calHint"></p>
   <div id="calBody" style="display:none;width:100%;max-width:480px">
     <div class="card" style="text-align:center"><div id="calLabel" style="color:var(--muted);font-size:13px">YOUR KNEE (from straight)</div>
       <div id="calNow" style="font-size:44px;font-weight:900;color:var(--cyan)">—</div>
       <div id="calZone" style="font-size:15px;font-weight:800;min-height:22px">Sit side-on, whole leg visible</div></div>
-    <p class="sub" id="calSteps2">1) Straighten your leg → tap <b>Set 0°</b>. &nbsp; 2) <b>Start</b>.</p>
-    <div class="row"><button class="btn ghost" id="calSet">🎯 Set 0°</button><button class="btn big gold" id="calGo">▶ Start</button></div>
+    <p class="sub" id="calSteps2" data-th>1) Straighten your leg → tap <b>Set 0°</b>. &nbsp; 2) <b>Start</b>.</p>
+    <div class="row"><button class="btn ghost" id="calSet" data-t>🎯 Set 0°</button><button class="btn big gold" id="calGo" data-t>▶ Start</button></div>
   </div>
 </section>
 
@@ -145,15 +149,15 @@
   <div id="sumStars"></div>
   <div class="card"><div id="sumStats"></div></div>
   <div id="sumAch"></div>
-  <div class="row"><button class="btn" id="btnReplay">↻ Again</button><button class="btn gold" id="btnSumHome">🏠 Menu</button></div>
+  <div class="row"><button class="btn" id="btnReplay" data-t>↻ Again</button><button class="btn gold" id="btnSumHome" data-t>🏠 Menu</button></div>
 </section>
 
 <!-- DASHBOARD -->
 <section class="screen" id="dashScreen">
-  <h2>📊 Progress</h2>
+  <h2 data-t>📊 Progress</h2>
   <div class="tiles" id="dTiles"></div>
   <div class="card"><div id="dGames"></div><canvas id="dChart"></canvas></div>
-  <button class="btn gold" id="btnDashBack">← Menu</button>
+  <button class="btn gold" id="btnDashBack" data-t>← Menu</button>
 </section>
 
 <div class="toast" id="toast"></div>

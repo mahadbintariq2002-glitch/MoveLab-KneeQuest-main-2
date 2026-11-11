@@ -1,0 +1,64 @@
+rules_version = '2';
+// MoveLab study — Firestore security rules.
+//   researchers/{uid}      : a document here (created by you in the console) makes that account a researcher.
+//   participants/{id}      : demographics + access code. Researchers read/write; the linked participant reads their own.
+//   identities/{id}        : NAME + CNIC. Researchers only. Participants can never read this.
+//   assessments/{id}       : WOMAC/TUG/BBS/VAS/ROM. Researchers only.
+//   sessions/{id}          : game sessions. Written once by the linked participant; researchers read/delete.
+//   consents/{id}          : consent record. Written by the linked participant; researchers read.
+//   participantLinks/{uid} : links an (anonymous) device to a study ID by proving the access code.
+//   meta/*                 : study counter + settings. Researchers only.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isResearcher() {
+      return signedIn() && exists(/databases/$(database)/documents/researchers/$(request.auth.uid));
+    }
+    function linkPath() { return /databases/$(database)/documents/participantLinks/$(request.auth.uid); }
+    // This device is linked to `pid` AND still holds that participant's CURRENT access code.
+    function isParticipant(pid) {
+      return signedIn()
+        && exists(linkPath())
+        && get(linkPath()).data.studyId == pid
+        && get(/databases/$(database)/documents/participants/$(pid)).data.accessCode == get(linkPath()).data.code;
+    }
+
+    match /researchers/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;      // so the app can check "am I a researcher?"
+      allow write: if false;                                      // managed only in the Firebase console
+    }
+
+    match /meta/{doc} { allow read, write: if isResearcher(); }
+
+    match /participants/{pid} {
+      allow read: if isResearcher() || isParticipant(pid);
+      allow create, update, delete: if isResearcher();
+    }
+
+    match /identities/{pid} { allow read, write: if isResearcher(); }
+    match /assessments/{id} { allow read, write: if isResearcher(); }
+
+    match /consents/{pid} {
+      allow read: if isResearcher() || isParticipant(pid);
+      allow create: if isParticipant(pid) && request.resource.data.studyId == pid;
+    }
+
+    match /sessions/{id} {
+      allow create: if isParticipant(request.resource.data.studyId);
+      allow read: if isResearcher() || isParticipant(resource.data.studyId);
+      // Immutable once written — except an IDENTICAL rewrite, so a retry after a lost acknowledgement is harmless.
+      allow update: if isParticipant(resource.data.studyId) && request.resource.data == resource.data;
+      allow delete: if isResearcher();
+    }
+
+    match /participantLinks/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isResearcher());
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['studyId', 'code', 'linkedAt'])
+        && exists(/databases/$(database)/documents/participants/$(request.resource.data.studyId))
+        && get(/databases/$(database)/documents/participants/$(request.resource.data.studyId)).data.accessCode == request.resource.data.code;
+      allow delete: if isResearcher();
+    }
+  }
+}

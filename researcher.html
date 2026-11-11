@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MoveLab Study — Researcher</title>
+<link rel="stylesheet" href="css/study.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🦵 MoveLab <span>Study</span></div>
+  <nav id="nav">
+    <a href="#/" data-r="">Participants</a>
+    <a href="#/add" data-r="add">Add participant</a>
+    <a href="#/export" data-r="export">Export</a>
+    <a href="#/settings" data-r="settings">Settings</a>
+    <a href="okc.html" target="_blank" rel="noopener">Games ↗</a>
+  </nav>
+  <div class="right"><span id="modeBadge" class="badge"></span><span id="userLabel"></span><button id="signOut" class="btn small ghost" hidden>Sign out</button></div>
+</header>
+<main id="app"><p class="muted">Loading…</p></main>
+<div id="toast" class="toast"></div>
+<script type="module" src="js/study/researcher.js"></script>
+</body>
+</html>

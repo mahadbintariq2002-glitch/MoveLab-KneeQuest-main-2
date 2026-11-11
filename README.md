@@ -1,3 +1,19 @@
+# MoveLab — research study app
+
+A web app for running the knee-OA exercise-game study: a **researcher dashboard** (participants, demographics, WOMAC / TUG / BBS / VAS / knee ROM, game progress, exports) and a **participant app** (Study ID sign-in, Urdu/English, consent, the 7 games with a pain check before and after each session).
+
+| Page | Who | What |
+|---|---|---|
+| `researcher.html` | researcher (laptop or phone) | add participants, record assessments, monitor adherence/progress, export CSV |
+| `participant.html` | participant (phone) | sign in with Study ID + access code, consent, then the games |
+| `okc.html` | participant / anyone | the 7 games (anonymous visitors see the unchanged public demo) |
+
+* **Local demo mode** (default): data stays in one browser — good for trying it out (`Settings → Load demo data`).
+* **Remote tracking**: follow [`cloud/SETUP.md`](cloud/SETUP.md) (Firebase, ~15 min) and paste the config into `js/study/cloud-config.js`.
+* Names and CNIC numbers are stored separately from research data; exports use the Study ID only.
+* Camera measures joint **position**, not force; knee angles are camera-estimated, not goniometer-grade.
+* Placeholders to replace before the study: consent wording (`js/study/participant.js`), Urdu translations (`js/okc/lang-ur.js`), pain-advisory thresholds (`js/okc/sync.js`).
+
 # MoveLab — Knee Range-of-Motion Tracker
 
 A phone web-app (PWA) that measures **knee flexion angle** live from your phone
