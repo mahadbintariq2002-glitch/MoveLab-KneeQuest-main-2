@@ -26,14 +26,15 @@ if(!q.get("choose") && (remembered === "patient" || remembered === "researcher")
 function render(){
   document.querySelectorAll(".langbar button").forEach(b => b.classList.toggle("on", b.dataset.l === getLang()));
   document.title = T("Virtual Therapy");
-  $("#view").innerHTML = `<div class="pcard" style="text-align:center">
+  $("#view").innerHTML = `<div class="center" style="padding:10px 0 6px">
       <div class="vt-logo">🦵</div><h1 class="vt-title">${esc(T("Virtual Therapy"))}</h1>
-      <p class="muted">${esc(T("Knee exercise games, guided by your phone's camera."))}</p>
-      <h2 style="margin-top:18px">${esc(T("Who is using the app?"))}</h2>
-      <div id="err"></div>
-      <button class="rolebtn" id="rPatient"><span class="ri">🧑‍🦳</span><span><b>${esc(T("Patient"))}</b><small>${esc(T("Sign in with your Study ID and play your exercise games."))}</small></span></button>
-      <button class="rolebtn" id="rResearcher"><span class="ri">🩺</span><span><b>${esc(T("Researcher"))}</b><small>${esc(T("Register patients, record assessments and follow their progress."))}</small></span></button>
-    </div>`;
+      <p class="muted" style="font-size:16px">${esc(T("Knee exercise games, guided by your phone's camera."))}</p></div>
+    <div class="pcard" style="padding:20px">
+      <h2 class="center" style="margin:0 0 4px">${esc(T("Who is using the app?"))}</h2>
+      <button class="rolebtn coral" id="rPatient"><span class="ri">🧑‍🦳</span><span><b>${esc(T("Patient"))}</b><small>${esc(T("Sign in with your Study ID and play your exercise games."))}</small></span><span class="go">›</span></button>
+      <button class="rolebtn navy" id="rResearcher"><span class="ri">🩺</span><span><b>${esc(T("Researcher"))}</b><small>${esc(T("Register patients, record assessments and follow their progress."))}</small></span><span class="go">›</span></button>
+    </div>
+    <div class="chips" style="justify-content:center;margin-top:6px"><span class="pill">${esc(T("📷 Camera-guided"))}</span><span class="pill coral">${esc(T("🎮 7 rehab games"))}</span><span class="pill navy">${esc(T("🔒 Private by design"))}</span></div>`;
   $("#rPatient").onclick = () => choose("patient");
   $("#rResearcher").onclick = () => choose("researcher");
 }

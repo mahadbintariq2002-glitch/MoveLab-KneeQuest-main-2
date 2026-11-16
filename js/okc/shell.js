@@ -70,7 +70,7 @@ function cleanSpeak(t){ return t.replace(/[^\p{L}\p{N}\s.,!'’-]/gu,"").replace
 
 // ── hub ──
 function refreshHub(){ const sc=Sync.context(), chip=$("studyChip"); chip.style.display=sc.studyId?"block":"none";
-  chip.innerHTML = sc.studyId ? T("Participant {id}",{id:sc.studyId}) + (sc.viaStore ? ` · <a href="participant.html?signout=1" style="color:inherit">${T("Sign out")}</a>` : "") : "";
+  chip.innerHTML = sc.studyId ? (sc.viaStore ? `<a href="participant.html" style="color:inherit">🏠 ${T("Home")}</a> · ` : "") + T("Participant {id}",{id:sc.studyId}) + (sc.viaStore ? ` · <a href="participant.html?signout=1" style="color:inherit">${T("Sign out")}</a>` : "") : "";
   $("extraLinks").style.display = sc.studyId ? "none" : "";                 // demo links (tracker, arcade) are not part of the study
   $("btnLang").textContent = getLang()==="ur" ? "English" : "اردو";
   const d=OKCSave.data; $("coinN").textContent=d.coins; $("rankN").textContent=T("Lv {n}",{n:rankFor(d.xp)}); $("streakN").textContent="🔥 "+d.streak; }
@@ -333,6 +333,8 @@ $("btnLang").onclick=()=>{ const next=getLang()==="ur"?"en":"ur"; setLang(next);
   const u=new URL(location.href); u.searchParams.delete("lang"); location.replace(u.toString()); };
 // boot
 resize(); buildHub(); refreshHub(); showScreen("hub"); Sync.flush().catch(()=>{});
+// deep link from the patient home (okc.html?game=quad): go straight to that game's set-up, if it is one of theirs
+{ const want=new URLSearchParams(location.search).get("game"), G=want && visibleGames().find(g=>g.def.id===want); if(G){ curDef=G.def; openDiff(); } }
 // pick up a changed prescription (the researcher may have assigned or removed games since the last visit)
 if(Sync.context().viaStore){ const before=JSON.stringify(Sync.context().games);
   import("../study/store.js").then(m=>m.getStore()).then(s=>s.participant.plan&&s.participant.plan())

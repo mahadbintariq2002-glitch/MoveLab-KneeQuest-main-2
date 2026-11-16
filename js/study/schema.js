@@ -13,6 +13,39 @@ export const MARITAL   = ["Single", "Married", "Widowed", "Divorced"];
 export const KL_GRADES = [ {v:1,label:"Grade 1 (doubtful)"}, {v:2,label:"Grade 2 (mild)"}, {v:3,label:"Grade 3 (moderate)"}, {v:4,label:"Grade 4 (severe)"} ];
 export const TUG_DEVICES = ["None", "Cane", "Walker", "Crutches", "Other"];
 
+// ── Diagnosis (researcher-only). Each save is a new dated entry, so the history is kept.
+// ICD-10 (WHO) M17 gonarthrosis: .0 primary bilateral · .1 other primary (unilateral) · .2 post-traumatic bilateral ·
+// .3 other post-traumatic · .4 other secondary bilateral · .5 other secondary · .9 unspecified.
+export const DX_TYPES = [
+  { v:"primary",        label:"Primary (idiopathic) knee osteoarthritis", short:"Primary knee OA" },
+  { v:"post_traumatic", label:"Post-traumatic knee osteoarthritis",       short:"Post-traumatic knee OA" },
+  { v:"secondary",      label:"Secondary knee osteoarthritis",            short:"Secondary knee OA" },
+  { v:"unspecified",    label:"Knee osteoarthritis, unspecified",         short:"Knee OA (unspecified)" },
+  { v:"other",          label:"Other diagnosis (specify)",                short:"Other" },
+];
+export const DX_SIDES = [ { v:"right", label:"Right knee" }, { v:"left", label:"Left knee" }, { v:"bilateral", label:"Both knees" } ];
+export function icd10For(type, side){
+  const bi = side === "bilateral";
+  return ({ primary: bi ? "M17.0" : "M17.1", post_traumatic: bi ? "M17.2" : "M17.3", secondary: bi ? "M17.4" : "M17.5", unspecified: "M17.9" })[type] || "";
+}
+export const COMORBIDITIES = ["Diabetes mellitus", "Hypertension", "Obesity (BMI ≥ 30)", "Cardiovascular disease", "Osteoporosis",
+  "Rheumatoid / inflammatory arthritis", "Chronic low back pain", "Previous knee surgery"];
+export const PRECAUTIONS = ["Recent knee injury (< 6 weeks)", "Knee replacement / implant", "Knee instability / giving way", "History of falls / poor balance",
+  "Acute swelling or warmth (effusion)", "Uncontrolled hypertension", "Recent fracture or surgery", "Severe pain at rest / at night"];
+export const IMAGING = ["X-ray", "MRI", "Ultrasound", "Clinical examination only"];
+export const bmiOf = (heightCm, weightKg) => { const h = Number(heightCm)/100, w = Number(weightKg); return h > 0.5 && w > 15 ? Math.round(w/(h*h)*10)/10 : null; };
+export const bmiClass = b => b == null ? "" : b < 18.5 ? "Underweight" : b < 25 ? "Normal" : b < 30 ? "Overweight" : "Obese";
+export const dxShort = d => { if(!d) return ""; const t = DX_TYPES.find(x => x.v === d.type); const side = (DX_SIDES.find(s => s.v === d.side) || {}).label || "";
+  return `${d.type === "other" ? (d.otherText || "Other") : (t ? t.short : "")}${side ? " · " + side : ""}`; };
+export const latestDx = list => (list || []).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] || null;
+export function validateDiagnosis(d){
+  const e = [];
+  if(!d.type) e.push("Choose the diagnosis."); if(d.type === "other" && !String(d.otherText || "").trim()) e.push("Describe the other diagnosis.");
+  if(!d.side) e.push("Choose the affected knee.");
+  for(const k of ["klLeft", "klRight"]) if(d[k] != null && d[k] !== "" && !(Number(d[k]) >= 0 && Number(d[k]) <= 4)) e.push("KL grade must be 0–4.");
+  return e;
+}
+
 // The exercise games, in hub order. A participant's `games` field (array of ids) is their prescription;
 // missing / null means "all games" (participants enrolled before prescriptions existed keep everything).
 export const GAMES = [
@@ -22,7 +55,7 @@ export const GAMES = [
   { id:"tke",   name:"Lock the Slot", emoji:"🔩", exercise:"Terminal Knee Extension" },
   { id:"tempo", name:"Tempo Lift",    emoji:"⏱️", exercise:"Resisted Knee Extension" },
   { id:"ham",   name:"Reel It In",    emoji:"🎣", exercise:"Hamstring Curl" },
-  { id:"bal",   name:"Steady Scales", emoji:"⚖️", exercise:"Static Balance" },
+  { id:"bal",   name:"Steady Scales", emoji:"⚖️", exercise:"Static Balance — Weight Shift & Double-Leg Stance" },
 ];
 export const GAME_IDS = GAMES.map(g => g.id);
 // The games a participant may play: their prescription filtered to known ids, or every game when none is set.
@@ -177,5 +210,15 @@ export function sessionsCsv(participants, sessions){
     {label:"balance_shift_left",get:s=>s.balShiftMaxLeft}, {label:"balance_shift_right",get:s=>s.balShiftMaxRight},
     {label:"pain_before",get:s=>s.painBefore}, {label:"pain_after",get:s=>s.painAfter}, {label:"app_version",get:s=>s.appVersion}, {label:"language",get:s=>s.lang},
   ]);
+}
+export function diagnosesCsv(diagnoses){
+  const rows = diagnoses.slice().sort((a, b) => a.studyId.localeCompare(b.studyId) || (a.createdAt || 0) - (b.createdAt || 0)), j = a => (a || []).join("; ");
+  return toCsv(rows, [
+    {label:"study_id",get:r=>r.studyId}, {label:"recorded_at",get:r=>r.createdAt ? new Date(r.createdAt).toISOString() : ""}, {label:"diagnosis_type",get:r=>r.type},
+    {label:"diagnosis_other",get:r=>r.otherText||""}, {label:"icd10",get:r=>r.icd10||""}, {label:"affected_side",get:r=>r.side}, {label:"kl_left",get:r=>r.klLeft ?? ""}, {label:"kl_right",get:r=>r.klRight ?? ""},
+    {label:"diagnosed_on",get:r=>r.diagnosedOn||""}, {label:"diagnosed_by",get:r=>r.diagnosedBy||""}, {label:"imaging",get:r=>r.imaging||""}, {label:"imaging_date",get:r=>r.imagingDate||""},
+    {label:"height_cm",get:r=>r.heightCm ?? ""}, {label:"weight_kg",get:r=>r.weightKg ?? ""}, {label:"bmi",get:r=>r.bmi ?? ""},
+    {label:"comorbidities",get:r=>j(r.comorbidities)}, {label:"comorbidity_other",get:r=>r.comorbidityOther||""}, {label:"precautions",get:r=>j(r.precautions)},
+    {label:"medications",get:r=>r.medications||""}, {label:"notes",get:r=>r.notes||""} ]);
 }
 export function identityCsv(identities){ return toCsv(identities, [{label:"study_id",get:r=>r.studyId},{label:"name",get:r=>r.name},{label:"cnic",get:r=>r.cnic}]); }

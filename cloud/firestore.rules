@@ -4,6 +4,7 @@ rules_version = '2';
 //   participants/{id}      : demographics + access code. Researchers read/write; the linked participant reads their own.
 //   identities/{id}        : NAME + CNIC. Researchers only. Participants can never read this.
 //   assessments/{id}       : WOMAC/TUG/BBS/VAS/ROM. Researchers only.
+//   diagnoses/{id}         : structured knee diagnosis entries (history). Researchers only.
 //   sessions/{id}          : game sessions. Written once by the linked participant; researchers read/delete.
 //   consents/{id}          : consent record. Written by the linked participant; researchers read.
 //   participantLinks/{uid} : links an (anonymous) device to a study ID by proving the access code.
@@ -38,6 +39,7 @@ service cloud.firestore {
 
     match /identities/{pid} { allow read, write: if isResearcher(); }
     match /assessments/{id} { allow read, write: if isResearcher(); }
+    match /diagnoses/{id}   { allow read, write: if isResearcher(); }   // clinical diagnosis history — never visible to participants
 
     match /consents/{pid} {
       allow read: if isResearcher() || isParticipant(pid);

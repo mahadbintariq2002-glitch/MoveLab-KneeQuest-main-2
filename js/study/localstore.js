@@ -4,7 +4,7 @@
 import { DEFAULTS, formatStudyId, makeAccessCode, normalizeCode, normalizeCnic, finalizeAssessment, validateParticipant, sessionTime, assignedGames } from "./schema.js";
 
 const KEY = "movelab_study_v1", PKEY = "movelab_participant_v1";
-const blank = () => ({ participants:{}, identities:{}, assessments:[], sessions:[], consents:{}, settings:{...DEFAULTS}, counter:0 });
+const blank = () => ({ participants:{}, identities:{}, assessments:[], sessions:[], consents:{}, diagnoses:[], settings:{...DEFAULTS}, counter:0 });
 const read = () => { try{ const d = JSON.parse(localStorage.getItem(KEY)); return d ? {...blank(), ...d, settings:{...DEFAULTS, ...(d.settings||{})}} : blank(); }catch(e){ return blank(); } };
 const write = db => localStorage.setItem(KEY, JSON.stringify(db));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "x" + Date.now().toString(36) + Math.random().toString(36).slice(2,8));
@@ -47,6 +47,12 @@ export function createLocalStore(){
     async deleteAssessment(id){ const db = read(); db.assessments = db.assessments.filter(a => a.id !== id); write(db); },
     async listSessions(studyId){ const all = read().sessions; return clone(studyId ? all.filter(s => s.studyId === studyId) : all); },
 
+    // diagnoses: one entry per save (history kept); researcher-only
+    async saveDiagnosis(studyId, d){ const db = read(); const rec = { ...clone(d), studyId, id: d.id || uid(), createdAt: d.createdAt || Date.now(), updatedAt: Date.now() };
+      const i = db.diagnoses.findIndex(x => x.id === rec.id); if(i >= 0) db.diagnoses[i] = rec; else db.diagnoses.push(rec); write(db); return rec; },
+    async listDiagnoses(studyId){ const all = read().diagnoses || []; return clone(studyId ? all.filter(x => x.studyId === studyId) : all); },
+    async deleteDiagnosis(id){ const db = read(); db.diagnoses = (db.diagnoses || []).filter(x => x.id !== id); write(db); },
+
     participant: {
       async login(studyId, code){
         const db = read(), id = String(studyId||"").trim().toUpperCase(), p = db.participants[id];
@@ -75,7 +81,7 @@ export function createLocalStore(){
       async generate(){ const db = read(); const n = generateDemo(db); write(db); return n; },
       async clear(){ const db = read(), ids = new Set(Object.values(db.participants).filter(p=>p.demo).map(p=>p.studyId));
         for(const id of ids){ delete db.participants[id]; delete db.identities[id]; delete db.consents[id]; }
-        db.assessments = db.assessments.filter(a => !ids.has(a.studyId)); db.sessions = db.sessions.filter(s => !ids.has(s.studyId)); write(db); return ids.size; },
+        db.assessments = db.assessments.filter(a => !ids.has(a.studyId)); db.sessions = db.sessions.filter(s => !ids.has(s.studyId)); db.diagnoses = (db.diagnoses || []).filter(x => !ids.has(x.studyId)); write(db); return ids.size; },
       async wipeAll(){ localStorage.removeItem(KEY); localStorage.removeItem(PKEY); },
     },
   };
@@ -102,6 +108,11 @@ function generateDemo(db){
       marital: "Married", painDurationMonths: 10 + Math.floor(R()*70), klGrade: kl } };
     db.identities[studyId] = { studyId, name: NAMES[i], cnic: `00000-00000${String(i+1).padStart(2,"0")}-${(i%9)+1}` };
     db.consents[studyId] = { at: enrolled + 3600000, version: "demo", lang: i%2 ? "ur" : "en" };
+    const side = ["right","bilateral","left","bilateral","right","left"][i], hc = 150 + Math.floor(R()*25), wk = 60 + Math.floor(R()*30);
+    (db.diagnoses ||= []).push({ id: uid(), studyId, demo:true, createdAt: enrolled - 86400000, type:"primary", side, icd10: side === "bilateral" ? "M17.0" : "M17.1",
+      klLeft: side === "right" ? null : kl, klRight: side === "left" ? null : kl, diagnosedOn: new Date(enrolled - 86400000*30).toISOString().slice(0,10), diagnosedBy:"Dr. Demo (orthopaedics)",
+      imaging:"X-ray", heightCm: hc, weightKg: wk, bmi: Math.round(wk/((hc/100)**2)*10)/10, comorbidities: i%2 ? ["Hypertension"] : ["Diabetes mellitus","Obesity (BMI ≥ 30)"],
+      precautions: i === 3 ? ["History of falls / poor balance"] : [], medications: "Paracetamol PRN", notes: "Demo record — fictional." });
 
     // game sessions: quality and ROM improve, pain eases; adherence per profile
     for(let w = 0; w < weeks; w++){

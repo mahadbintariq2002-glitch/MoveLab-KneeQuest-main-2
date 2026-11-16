@@ -3,31 +3,31 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#0a0e24" />
+<meta name="theme-color" content="#0B1F33" />
 <meta name="apple-mobile-web-app-capable" content="yes" /><meta name="mobile-web-app-capable" content="yes" />
 <title>OKC Rehab Games — MoveLab</title>
 <style>
-  :root{ --bg:#0a0e24; --panel:rgba(18,22,54,.9); --line:#2c3670; --txt:#eef2ff; --muted:#9aa6d4;
-    --cyan:#37e1ff; --amber:#ffb84d; --green:#8affc0; --pink:#ff6fae; --gold:#ffe08a; --r:18px; }
+  :root{ --bg:#0B1F33; --panel:rgba(15,42,68,.9); --line:#26527c; --txt:#EFFBF9; --muted:#A3C7D8;
+    --cyan:#2DD4BF; --amber:#ffb84d; --green:#8affc0; --pink:#FF7A59; --gold:#ffe08a; --r:18px; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden;overscroll-behavior:none}
   #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;z-index:0}
   .screen{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;overflow:auto;
-    background:linear-gradient(135deg,#141a44,#25184f 55%,#3f1f56)}
+    background:linear-gradient(135deg,#0B1F33,#0F2A44 50%,#0F4C4A)}
   .screen.on{display:flex;animation:fade .35s ease}
   /* centre when there is room, scroll from the TOP when there is not (plain justify-content:center clips the top on small screens) */
   .screen{justify-content:flex-start} .screen>:first-child{margin-top:auto} .screen>:last-child{margin-bottom:auto} #hub{padding-top:58px} #hub>.hero{margin-top:auto}
   .screen::before{content:"";position:fixed;inset:-20%;z-index:-1;background:
-    radial-gradient(circle at 20% 20%,#37e1ff22,transparent 40%),radial-gradient(circle at 80% 30%,#ff6fae22,transparent 40%),radial-gradient(circle at 50% 90%,#8affc022,transparent 45%);animation:drift 15s ease-in-out infinite alternate}
+    radial-gradient(circle at 20% 20%,#2DD4BF22,transparent 40%),radial-gradient(circle at 80% 30%,#FF7A5922,transparent 40%),radial-gradient(circle at 50% 90%,#8affc022,transparent 45%);animation:drift 15s ease-in-out infinite alternate}
   @keyframes drift{to{transform:translate(-4%,-3%) scale(1.08)}}
   @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
   @keyframes pop{0%{transform:scale(0) rotate(-30deg);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
   @keyframes floaty{to{transform:translateY(-10px)}}
-  h1{margin:0;font-size:clamp(26px,7vw,44px);font-weight:900;letter-spacing:.5px;background:linear-gradient(90deg,var(--gold),var(--cyan),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 18px #37e1ff55)}
+  h1{margin:0;font-size:clamp(26px,7vw,44px);font-weight:900;letter-spacing:.5px;background:linear-gradient(90deg,var(--gold),var(--cyan),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 18px #2DD4BF55)}
   h2{margin:0;font-size:clamp(19px,5vw,28px);font-weight:800}
   p.sub{color:var(--muted);font-size:15.5px;max-width:480px;line-height:1.5;margin:0}
-  .hero{font-size:66px;animation:floaty 2.6s ease-in-out infinite alternate;filter:drop-shadow(0 0 22px #37e1ff88)}
-  .btn{border:none;border-radius:var(--r);padding:16px 30px;font-size:19px;font-weight:800;cursor:pointer;color:#04122a;background:linear-gradient(180deg,#8becff,#37e1ff);box-shadow:0 8px 22px #37e1ff44,inset 0 -3px 0 #0af3;display:inline-flex;gap:10px;align-items:center;justify-content:center;min-width:170px;min-height:58px;transition:transform .1s}
+  .hero{font-size:66px;animation:floaty 2.6s ease-in-out infinite alternate;filter:drop-shadow(0 0 22px #2DD4BF88)}
+  .btn{border:none;border-radius:var(--r);padding:16px 30px;font-size:19px;font-weight:800;cursor:pointer;color:#04122a;background:linear-gradient(180deg,#99F6E4,#2DD4BF);box-shadow:0 8px 22px #2DD4BF44,inset 0 -3px 0 #0af3;display:inline-flex;gap:10px;align-items:center;justify-content:center;min-width:170px;min-height:58px;transition:transform .1s}
   .btn:active{transform:translateY(2px) scale(.98)} .btn.big{font-size:22px;padding:20px 40px}
   .btn.gold{background:linear-gradient(180deg,#ffe9a8,#ffc24d);box-shadow:0 8px 22px #ffb84d55,inset 0 -3px 0 #a705}
   .btn.ghost{background:rgba(255,255,255,.08);color:var(--txt);box-shadow:none;border:1px solid var(--line);font-weight:700;min-width:120px}

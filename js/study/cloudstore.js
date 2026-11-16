@@ -87,6 +87,15 @@ export async function createCloudStore(cfg, injectedSdk){
     async deleteAssessment(id){ await sdk.deleteDoc(D("assessments", id)); },
     async listSessions(studyId){ return await all("sessions", studyId); },
 
+    // diagnoses/{id}: one document per save (history kept); researchers only (see firestore.rules)
+    async saveDiagnosis(studyId, d){
+      const rec = JSON.parse(JSON.stringify({ ...d, studyId, id: d.id || uid(), createdAt: d.createdAt || Date.now(), updatedAt: Date.now(),
+        by: (auth.currentUser && auth.currentUser.email) || null }));
+      await sdk.setDoc(D("diagnoses", rec.id), rec); return rec;
+    },
+    async listDiagnoses(studyId){ return await all("diagnoses", studyId); },
+    async deleteDiagnosis(id){ await sdk.deleteDoc(D("diagnoses", id)); },
+
     participant: {
       async login(studyId, code){
         const id = String(studyId || "").trim().toUpperCase(), c = normalizeCode(code);
