@@ -21,8 +21,8 @@ import android.widget.FrameLayout;
 import androidx.webkit.WebViewAssetLoader;
 
 /**
- * Hosts the MoveLab web app (bundled in assets) in a WebView. The patient flavor opens participant.html
- * (sign-in → consent → games), the researcher flavor opens researcher.html (the dashboard).
+ * "Virtual Therapy": hosts the web app (bundled in assets) in a WebView. It opens therapy.html, where the user
+ * chooses Patient (sign-in → consent → assigned games) or Researcher (dashboard).
  *
  * The files are served from https://appassets.androidplatform.net/assets/ so ES modules, getUserMedia and
  * Firebase all see a normal secure origin — nothing is read from file:// and no network is needed to load the UI.
@@ -39,9 +39,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if ("patient".equals(BuildConfig.ROLE)) {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // exercises run for minutes with no touches
-        }
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // exercises run for minutes with no touches
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xFF0A0E24);

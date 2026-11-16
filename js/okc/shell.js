@@ -74,8 +74,10 @@ function refreshHub(){ const sc=Sync.context(), chip=$("studyChip"); chip.style.
   $("extraLinks").style.display = sc.studyId ? "none" : "";                 // demo links (tracker, arcade) are not part of the study
   $("btnLang").textContent = getLang()==="ur" ? "English" : "اردو";
   const d=OKCSave.data; $("coinN").textContent=d.coins; $("rankN").textContent=T("Lv {n}",{n:rankFor(d.xp)}); $("streakN").textContent="🔥 "+d.streak; }
+// A study participant sees only the games their researcher assigned (cached on sign-in; refreshed below).
+const visibleGames=()=>{ const sc=Sync.context(); return sc.studyId && sc.games ? GAMES.filter(G=>sc.games.includes(G.def.id)) : GAMES; };
 function buildHub(){ const g=$("gameGrid"); g.innerHTML=""; let lastGroup=null;
-  GAMES.forEach((G,i)=>{ const def=G.def, id=def?def.id:G.id, name=def?def.name:G.name, emoji=def?def.emoji:G.emoji, ex=def?def.exercise:G.exercise;
+  visibleGames().forEach((G,i)=>{ const def=G.def, id=def?def.id:G.id, name=def?def.name:G.name, emoji=def?def.emoji:G.emoji, ex=def?def.exercise:G.exercise;
     const grp=(def&&def.group)||null;                       // games outside the open-chain suite get their own heading
     if(i>0 && grp!==lastGroup && grp){ const h=document.createElement("div"); h.className="grouphead"; h.textContent=T(grp); g.appendChild(h); }
     lastGroup=grp;
@@ -331,6 +333,10 @@ $("btnLang").onclick=()=>{ const next=getLang()==="ur"?"en":"ur"; setLang(next);
   const u=new URL(location.href); u.searchParams.delete("lang"); location.replace(u.toString()); };
 // boot
 resize(); buildHub(); refreshHub(); showScreen("hub"); Sync.flush().catch(()=>{});
+// pick up a changed prescription (the researcher may have assigned or removed games since the last visit)
+if(Sync.context().viaStore){ const before=JSON.stringify(Sync.context().games);
+  import("../study/store.js").then(m=>m.getStore()).then(s=>s.participant.plan&&s.participant.plan())
+    .then(()=>{ if(JSON.stringify(Sync.context().games)!==before && scene==="hub") buildHub(); }).catch(()=>{}); }
 // test hook
 window.__okc={ scene:()=>scene,
   openGame:(id,hold,reps)=>{ const G=GAMES.find(g=>g.def&&g.def.id===id); curDef=(G&&G.def)||QUAD; chosenDiff="gentle"; if(hold)chosenHold=hold; if(reps)chosenReps=reps; mode="mouse"; startGame(); },

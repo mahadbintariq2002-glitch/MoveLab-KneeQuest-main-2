@@ -7,7 +7,7 @@
 //                  so issuing a new code instantly signs old devices out.
 //   Data         : participants/ (demographics, no names) · identities/ (name, CNIC; researchers only) ·
 //                  assessments/ (researchers only) · sessions/ (written by the participant) · consents/ · meta/study.
-import { DEFAULTS, formatStudyId, makeAccessCode, normalizeCode, prettyCode, normalizeCnic, finalizeAssessment, validateParticipant } from "./schema.js";
+import { DEFAULTS, formatStudyId, makeAccessCode, normalizeCode, prettyCode, normalizeCnic, finalizeAssessment, validateParticipant, assignedGames } from "./schema.js";
 
 const FB_VERSION = "10.14.1", PKEY = "movelab_participant_v1";
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
@@ -61,13 +61,13 @@ export async function createCloudStore(cfg, injectedSdk){
     },
     async getParticipant(id){ const [p, c] = await Promise.all([snap(D("participants", id)), snap(D("consents", id))]); return p ? { ...nice(p), consentAt: (c && c.at) || null } : null; },
 
-    async registerParticipant({ name, cnic, demographics, group }){
+    async registerParticipant({ name, cnic, demographics, group, games }){
       const errs = validateParticipant({ name, cnic, demographics }); if(errs.length) throw new Error(errs.join(" "));
       const code = normalizeCode(makeAccessCode()), by = (auth.currentUser && auth.currentUser.uid) || null;
       const studyId = await sdk.runTransaction(db, async tx => {                                // sequential IDs, no duplicates even with two researchers
         const mref = D("meta", "study"), m = await tx.get(mref), n = ((m.exists() && m.data().counter) || 0) + 1, id = formatStudyId(n);
         tx.set(mref, { counter: n }, { merge: true });
-        tx.set(D("participants", id), { studyId: id, group: group || null, demographics: clone(demographics), accessCode: code, enrolledAt: Date.now(), enrolledBy: by });
+        tx.set(D("participants", id), { studyId: id, group: group || null, games: Array.isArray(games) && games.length ? games.slice() : null, demographics: clone(demographics), accessCode: code, enrolledAt: Date.now(), enrolledBy: by });
         tx.set(D("identities", id), { studyId: id, name: name.trim(), cnic: normalizeCnic(cnic) });
         return id;
       });
@@ -102,6 +102,14 @@ export async function createCloudStore(cfg, injectedSdk){
       current(){ return readLocal(); },
       async setLang(lang){ const s = readLocal(); if(s){ s.lang = lang; localStorage.setItem(PKEY, JSON.stringify(s)); } },
       async logout(){ localStorage.removeItem(PKEY); try{ await sdk.signOut(auth); }catch(e){} },
+      // The games the researcher assigned (participants/{id}.games — the rules let a linked device read its own
+      // participant document). Cached in the sign-in record so the hub still filters correctly offline.
+      async plan(){
+        const s = readLocal(); if(!s) return null;
+        const p = await snap(D("participants", s.studyId)), games = assignedGames(p);
+        const cur = readLocal(); if(cur && cur.studyId === s.studyId){ cur.games = games; localStorage.setItem(PKEY, JSON.stringify(cur)); }
+        return { games };
+      },
       async hasConsent(){ const s = readLocal(); return !!(s && s.consented); },
       async saveConsent(c){
         const s = readLocal(); if(!s) throw new Error("Not signed in.");

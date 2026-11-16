@@ -24,11 +24,14 @@ export const Sync = {
     let c = {};
     try{ const b = native(); if(b && b.getContext) c = JSON.parse(b.getContext() || "{}"); }catch(e){}
     let q = null; try{ q = new URLSearchParams(location.search); }catch(e){}
-    const st = stored(), signedIn = !!(st && st.studyId);
+    const demo = !!(q && q.get("demo"));                                   // researcher's "Preview games": never recorded
+    const st = demo ? null : stored(), signedIn = !!(st && st.studyId);
+    if(demo) c = {};
     const studyId = (c.studyId || (signedIn && st.consented ? st.studyId : null) || (q && q.get("pid")) || "").trim() || null;
     let dev = null; try{ dev = localStorage.getItem("movelab_lang"); }catch(e){}                 // the latest language chosen on this device
     const lang = (q && q.get("lang")) || c.lang || dev || (signedIn && st.lang) || null;      // URL > Android app > device choice > signed-in default
-    return { studyId, lang, source: native() ? "android" : "web", preview: !!c.preview, needsConsent: !c.studyId && signedIn && !st.consented, viaStore: !c.studyId && signedIn && !!st.consented };
+    const games = (signedIn && Array.isArray(st.games) && st.games.length) ? st.games : null;   // researcher's prescription (null = all games)
+    return { studyId, lang, games, source: native() ? "android" : "web", preview: !!c.preview, needsConsent: !c.studyId && signedIn && !st.consented, viaStore: !c.studyId && signedIn && !!st.consented };
   },
   get active(){ return !!this.context().studyId; },
 

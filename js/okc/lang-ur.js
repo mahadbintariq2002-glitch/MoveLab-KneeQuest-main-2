@@ -2,6 +2,17 @@
 // and <b> tags). A native Urdu speaker should review this wording before the study starts. `patterns` handle text with
 // numbers that the games build themselves (cues, readouts). Anything missing simply shows in English.
 const exact = {
+ "Virtual Therapy": "ورچوئل تھراپی",
+ "Knee exercise games, guided by your phone's camera.": "فون کے کیمرے کی رہنمائی میں گھٹنے کی ورزش کے کھیل۔",
+ "Who is using the app?": "ایپ کون استعمال کر رہا ہے؟",
+ "Patient": "مریض",
+ "Sign in with your Study ID and play your exercise games.": "اپنی اسٹڈی آئی ڈی سے لاگ اِن کریں اور اپنی ورزش کے کھیل کھیلیں۔",
+ "Researcher": "محقق",
+ "Register patients, record assessments and follow their progress.": "مریضوں کا اندراج کریں، جائزے درج کریں اور ان کی پیش رفت دیکھیں۔",
+ "Change role": "کردار تبدیل کریں",
+ "🩺 Virtual Therapy sign-in": "🩺 ورچوئل تھراپی لاگ اِن",
+ "Your exercises": "آپ کی ورزشیں",
+ "This will sign the patient out on this phone. Continue?": "اس سے اس فون پر مریض لاگ آؤٹ ہو جائے گا۔ جاری رکھیں؟",
  "Researcher sign-in": "محقق کا لاگ اِن",
  "Demo mode: your data stays on this device.": "ڈیمو موڈ: آپ کا ڈیٹا اسی ڈیوائس پر رہتا ہے۔",
  "MoveLab exercise study": "موو لیب ورزش کی تحقیق",

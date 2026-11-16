@@ -2,8 +2,8 @@ plugins {
     id("com.android.application")
 }
 
-// The apps are the web code in the repo root (okc.html, participant.html, researcher.html, js/, css/) hosted in a
-// WebView. Nothing is duplicated: the Sync tasks below copy those files into each flavor's assets at build time.
+// "Virtual Therapy" is the web code in the repo root (therapy.html → participant.html / researcher.html → okc.html,
+// plus js/ and css/) hosted in a WebView. Nothing is duplicated: syncWeb copies those files into the app at build time.
 val webRoot = rootProject.projectDir.parentFile
 
 android {
@@ -11,31 +11,17 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        applicationId = "pk.movelab.virtualtherapy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
-        // Where participants sign in on the web (shown on access cards). The live GitHub Pages site.
+        versionCode = 2
+        versionName = "2.0"
+        buildConfigField("String", "START_PAGE", "\"therapy.html\"")
+        // The public web version (shown on access cards, so patients can also use a browser).
         buildConfigField("String", "PUBLIC_BASE", "\"https://mahadbintariq2002-glitch.github.io/MoveLab-KneeQuest-main-2/\"")
     }
 
     buildFeatures { buildConfig = true }
-
-    flavorDimensions += "role"
-    productFlavors {
-        create("patient") {
-            dimension = "role"
-            applicationId = "pk.movelab.kneequest.patient"
-            buildConfigField("String", "ROLE", "\"patient\"")
-            buildConfigField("String", "START_PAGE", "\"participant.html\"")
-        }
-        create("researcher") {
-            dimension = "role"
-            applicationId = "pk.movelab.kneequest.researcher"
-            buildConfigField("String", "ROLE", "\"researcher\"")
-            buildConfigField("String", "START_PAGE", "\"researcher.html\"")
-        }
-    }
 
     buildTypes {
         release {
@@ -54,8 +40,7 @@ android {
     }
 
     sourceSets {
-        getByName("patient").assets.srcDir(layout.buildDirectory.dir("web/patient"))
-        getByName("researcher").assets.srcDir(layout.buildDirectory.dir("web/researcher"))
+        getByName("main").assets.srcDir(layout.buildDirectory.dir("web"))
     }
 }
 
@@ -64,19 +49,15 @@ dependencies {
     implementation("androidx.core:core:1.15.0")       // FileProvider (sharing CSV exports)
 }
 
-listOf("patient", "researcher").forEach { flavor ->
-    val cap = flavor.replaceFirstChar { it.uppercase() }
-    val sync = tasks.register<Sync>("syncWeb$cap") {
-        from(webRoot) {
-            include("okc.html", "participant.html", "researcher.html", "manifest.json", "css/**", "js/**")
-            if (flavor == "patient") exclude("researcher.html", "js/study/researcher.js", "js/study/charts.js")
-        }
-        into(layout.buildDirectory.dir("web/$flavor"))
+val syncWeb = tasks.register<Sync>("syncWeb") {
+    from(webRoot) {
+        include("therapy.html", "participant.html", "researcher.html", "okc.html", "manifest.json", "css/**", "js/**")
     }
-    // every task that reads this flavor's assets must run after the copy
-    tasks.configureEach {
-        if (name.contains(cap) && (name.contains("Assets") || name.contains("Lint") || name.contains("lint"))) {
-            dependsOn(sync)
-        }
+    into(layout.buildDirectory.dir("web"))
+}
+// every task that reads the assets must run after the copy
+tasks.configureEach {
+    if (name.contains("Assets") || name.contains("Lint") || name.contains("lint")) {
+        if (name != "syncWeb") dependsOn(syncWeb)
     }
 }

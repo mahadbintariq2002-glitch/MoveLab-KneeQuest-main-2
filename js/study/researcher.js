@@ -7,7 +7,10 @@ const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [..
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const app = $("#app");
 let store, settings, user, redraw = null;
-const GAME_NAMES = { quad:"Quad Press", slr:"Lift-Off", heel:"Trace the Arc", tke:"Lock the Slot", tempo:"Tempo Lift", ham:"Reel It In", bal:"Steady Scales" };
+const GAME_NAMES = Object.fromEntries(S.GAMES.map(g => [g.id, g.name]));
+// Checkbox grid for a participant's game prescription (used when adding a participant and on "Details & access").
+const gamePicker = (selected) => `<div class="gamepick">${S.GAMES.map(g => `<label><input type="checkbox" name="game" value="${g.id}" ${selected.includes(g.id) ? "checked" : ""}> ${g.emoji} ${esc(g.name)}<span class="hint">· ${esc(g.exercise)}</span></label>`).join("")}</div>`;
+const pickedGames = root => $$('input[name="game"]:checked', root).map(el => el.value);
 const gname = s => GAME_NAMES[s.game] || s.gameName || s.game;
 
 const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.remove("on"), 2400); };
@@ -17,13 +20,14 @@ const ago = t => { if(!t) return "never"; const d = Math.floor((Date.now()-t)/86
 const r1 = v => v == null ? "—" : (Math.round(v*10)/10);
 // Inside the Android researcher app a blob download goes nowhere, so the file is handed to the app (it opens the share sheet: Drive, WhatsApp, email…).
 const droid = () => { const b = typeof window !== "undefined" && window.AndroidBridge; return b || null; };
-const patientUrl = () => { try{ const b = droid(); if(b && b.getContext){ const c = JSON.parse(b.getContext() || "{}"); if(c.publicBase) return c.publicBase + "participant.html"; } }catch(e){} return location.origin + location.pathname.replace(/researcher\.html$/, "participant.html"); };
+const patientUrl = () => { try{ const b = droid(); if(b && b.getContext){ const c = JSON.parse(b.getContext() || "{}"); if(c.publicBase) return c.publicBase + "therapy.html"; } }catch(e){} return location.origin + location.pathname.replace(/researcher\.html$/, "therapy.html"); };
 function download(name, text){ const b = droid(); if(b && b.saveFile){ try{ b.saveFile(name, "text/csv", text); return; }catch(e){} } const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type:"text/csv;charset=utf-8" })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 const pdur = m => m >= 12 ? `${Math.floor(m/12)} y${m%12 ? " " + (m%12) + " m" : ""}` : `${m} m`;
 const camera = list => list.filter(s => s.inputMode !== "mouse");
 
 // ── boot / routing ───────────────────────────────────────────────────────────────────────────
 (async function boot(){
+  try{ localStorage.setItem("vt_role", "researcher"); }catch(e){}       // next launch of the app opens the researcher side
   store = await getStore();
   $("#modeBadge").textContent = store.mode === "cloud" ? "Cloud" : "Local demo mode"; $("#modeBadge").classList.toggle("warn", store.mode !== "cloud");
   $("#signOut").onclick = async () => { await store.researcher.signOut(); user = null; route(); };
@@ -110,24 +114,25 @@ function viewAdd(){
     <div class="field"><label>Duration of pain</label><div class="row" style="flex-wrap:nowrap"><input name="pd" type="number" min="0" step="0.5" required><select name="pdu" style="max-width:110px"><option value="months">months</option><option value="years">years</option></select></div></div>
     <div class="field"><label>Knee OA grade (Kellgren–Lawrence)</label><select name="klGrade" required><option value="">Select…</option>${opt(S.KL_GRADES, g => g.label)}</select></div>
     <div class="field"><label>Study group <span class="hint">(optional)</span></label><select name="group"><option value="">Not assigned</option>${opt(settings.groups)}</select></div></div>
-    <div class="row" style="margin-top:8px"><button class="btn">Create participant</button><a class="btn ghost" href="#/">Cancel</a></div></form>`;
+    <h3 style="margin-top:8px">Games for this patient <span class="hint">(only these appear in the patient's app; you can change them later)</span></h3>${gamePicker(S.GAME_IDS)}
+    <div class="row" style="margin-top:14px"><button class="btn">Create participant</button><a class="btn ghost" href="#/">Cancel</a></div></form>`;
   $("#f").onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target), g = k => String(f.get(k) || "").trim(); $("#msg").innerHTML = "";
     const pd = Number(g("pd")), months = Math.round(g("pdu") === "years" ? pd * 12 : pd);
     const input = { name: g("name"), cnic: g("cnic"), group: g("group") || null, demographics: { age: Number(g("age")), gender: g("gender"), residence: g("residence"), education: g("education"),
-      occupation: g("occupation"), marital: g("marital"), painDurationMonths: months, klGrade: Number(g("klGrade")) } };
-    const errs = S.validateParticipant(input); if(errs.length){ $("#msg").innerHTML = `<div class="err">${errs.map(esc).join("<br>")}</div>`; window.scrollTo(0, 0); return; }
+      occupation: g("occupation"), marital: g("marital"), painDurationMonths: months, klGrade: Number(g("klGrade")) }, games: pickedGames(e.target) };
+    const errs = S.validateParticipant(input); if(!input.games.length) errs.push("Choose at least one game for this patient."); if(errs.length){ $("#msg").innerHTML = `<div class="err">${errs.map(esc).join("<br>")}</div>`; window.scrollTo(0, 0); return; }
     try{ const r = await store.registerParticipant(input); showCreated(r.studyId, r.accessCode, input.demographics); }
     catch(err){ $("#msg").innerHTML = `<div class="err">${esc(err.message)}</div>`; } };
 }
 function showCreated(id, code){
   app.innerHTML = `<div class="card" style="max-width:560px;margin:20px auto;text-align:center"><div class="ok">Participant created</div>
-    <p class="muted">Give these to the participant. They sign in at <b>${esc(patientUrl())}</b> (or in the MoveLab patient app)</p>
+    <p class="muted">Give these to the participant. In the <b>Virtual Therapy</b> app (or at <b>${esc(patientUrl())}</b>) they choose <b>Patient</b> and sign in.</p>
     <p class="muted small" style="margin:0">Study ID</p><div class="codebox" style="margin-bottom:10px">${esc(id)}</div>
     <p class="muted small" style="margin:0">Access code</p><div class="codebox">${esc(code)}</div>
     <div class="row" style="justify-content:center;margin-top:16px"><button class="btn ghost" id="cp">Copy both</button><button class="btn ghost" id="pr">Print card</button><a class="btn" href="#/assess/${id}">Record baseline</a><a class="btn ghost" href="#/p/${id}">Open participant</a></div>
     <p class="muted small" style="margin-top:12px">You can see this code again under the participant's “Details & access” tab.</p></div>`;
-  $("#cp").onclick = () => { const msg = `Study ID: ${id}\nAccess code: ${code}`; const b = droid(); if(b && b.shareText){ try{ b.shareText("MoveLab study access", msg + "\nSign in at: " + patientUrl()); return; }catch(e){} } navigator.clipboard && navigator.clipboard.writeText(msg); toast("Copied"); };
-  $("#pr").onclick = () => { if(droid()){ $("#cp").click(); return; } const w = open("", "_blank"); w.document.write(`<body style="font:20px system-ui;padding:30px"><h2>MoveLab study</h2><p>Study ID: <b>${esc(id)}</b></p><p>Access code: <b style="letter-spacing:.12em">${esc(code)}</b></p><p>Sign in at: ${esc(location.origin + location.pathname.replace(/researcher\.html$/, "participant.html"))}</p></body>`); w.print(); };
+  $("#cp").onclick = () => { const msg = `Virtual Therapy\nStudy ID: ${id}\nAccess code: ${code}`; const b = droid(); if(b && b.shareText){ try{ b.shareText("Virtual Therapy access", msg + "\nOpen the app, choose Patient, and sign in. Web: " + patientUrl()); return; }catch(e){} } navigator.clipboard && navigator.clipboard.writeText(msg); toast("Copied"); };
+  $("#pr").onclick = () => { if(droid()){ $("#cp").click(); return; } const w = open("", "_blank"); w.document.write(`<body style="font:20px system-ui;padding:30px"><h2>Virtual Therapy</h2><p>Study ID: <b>${esc(id)}</b></p><p>Access code: <b style="letter-spacing:.12em">${esc(code)}</b></p><p>Open the Virtual Therapy app, choose <b>Patient</b>, and sign in.<br>Web: ${esc(patientUrl())}</p></body>`); w.print(); };
 }
 
 // ── participant detail ───────────────────────────────────────────────────────────────────────
@@ -178,7 +183,8 @@ function tabGames(p, ssAll){
     const ss = (incl ? ssAll : camera(ssAll)).slice().sort((a, b) => S.sessionTime(a) - S.sessionTime(b)), done = ss.filter(S.isDone);
     const q5 = done.slice(-5).map(s => s.qualityPct), pb = S.avg(done.map(s => s.painBefore)), pa = S.avg(done.map(s => s.painAfter)), la = S.lastActive(ss);
     const weekly = S.weeklyCounts(ss, 8), byGame = {}; for(const s of ss){ (byGame[s.game] ||= []).push(s); }
-    box.innerHTML = `<div class="row between" style="margin-bottom:10px"><span class="muted small">${ssAll.length - camera(ssAll).length ? `${ssAll.length - camera(ssAll).length} mouse-preview/test session(s) excluded by default` : "&nbsp;"}</span>
+    box.innerHTML = `<p class="small" style="margin-bottom:8px"><b>Assigned:</b> ${S.assignedGames(p).map(id => esc(GAME_NAMES[id])).join(" · ")} <a href="#/p/${p.studyId}/details" class="small">change</a></p>
+      <div class="row between" style="margin-bottom:10px"><span class="muted small">${ssAll.length - camera(ssAll).length ? `${ssAll.length - camera(ssAll).length} mouse-preview/test session(s) excluded by default` : "&nbsp;"}</span>
       <label style="margin:0;display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="incl" style="width:auto" ${incl ? "checked" : ""}> Include test sessions</label></div>
       <div class="tiles"><div class="tile"><b>${done.length}</b><span>Completed sessions</span></div><div class="tile"><b>${S.sessionsInLastDays(ss, 7)}</b><span>Last 7 days (prescribed ${settings.prescribedPerWeek})</span></div>
       <div class="tile"><b>${r1(S.avg(q5))}${q5.length ? "%" : ""}</b><span>Avg quality, last 5</span></div><div class="tile"><b>${ago(la)}</b><span>Last active</span></div>
@@ -211,10 +217,14 @@ async function tabDetails(p, as){
     <h3 style="margin-top:18px">Participant access</h3><p class="muted small">Study ID and access code for signing in to the participant app.</p>
     <div class="row"><div><div class="muted small">Study ID</div><div class="codebox" style="font-size:20px;padding:8px 12px">${esc(p.studyId)}</div></div><div><div class="muted small">Access code</div><div class="codebox" style="font-size:20px;padding:8px 12px" id="codev">${esc(p.accessCode)}</div></div></div>
     <div class="row" style="margin-top:10px"><button class="btn small ghost" id="cpc">Copy</button><button class="btn small danger" id="newc">Issue new code</button></div>
-    <p class="muted small" style="margin-top:8px">A new code signs the participant out of their devices; they enter the new code to continue.</p></div></div>`;
+    <p class="muted small" style="margin-top:8px">A new code signs the participant out of their devices; they enter the new code to continue.</p></div></div>
+    <div class="card" id="gcard"><h3>Assigned games</h3><p class="muted small">Only the ticked games appear in this patient's app. Changes reach their phone the next time they open the games.</p>
+    ${gamePicker(S.assignedGames(p))}<div class="row" style="margin-top:10px"><button class="btn small" id="gsave">Save games</button><span class="muted small" id="gmsg"></span></div></div>`;
+  $("#gsave").onclick = async () => { const games = pickedGames($("#gcard")); if(!games.length){ $("#gmsg").textContent = "Choose at least one game."; return; }
+    await store.updateParticipant(p.studyId, { games }); p.games = games; $("#gmsg").textContent = ""; toast("Games updated"); };
   $("#grp").onchange = async e => { await store.updateParticipant(p.studyId, { group: e.target.value || null }); toast("Group updated"); };
   $("#reveal").onclick = async () => { const i = await store.getIdentity(p.studyId); $("#idbox").innerHTML = i ? `<dl class="kv"><dt>Name</dt><dd>${esc(i.name)}</dd><dt>CNIC</dt><dd>${esc(i.cnic)}</dd></dl>` : `<span class="muted">Not found</span>`; };
-  $("#cpc").onclick = () => { const b = droid(); if(b && b.shareText){ try{ b.shareText("MoveLab study access", `Study ID: ${p.studyId}\nAccess code: ${$("#codev").textContent}\nSign in at: ${patientUrl()}`); return; }catch(e){} } navigator.clipboard && navigator.clipboard.writeText(`Study ID: ${p.studyId}\nAccess code: ${$("#codev").textContent}`); toast("Copied"); };
+  $("#cpc").onclick = () => { const b = droid(); if(b && b.shareText){ try{ b.shareText("Virtual Therapy access", `Virtual Therapy\nStudy ID: ${p.studyId}\nAccess code: ${$("#codev").textContent}\nOpen the app, choose Patient, and sign in. Web: ${patientUrl()}`); return; }catch(e){} } navigator.clipboard && navigator.clipboard.writeText(`Study ID: ${p.studyId}\nAccess code: ${$("#codev").textContent}`); toast("Copied"); };
   $("#newc").onclick = async () => { if(!confirm("Issue a new access code? The old one stops working.")) return; $("#codev").textContent = await store.resetAccessCode(p.studyId); toast("New code issued"); };
 }
 

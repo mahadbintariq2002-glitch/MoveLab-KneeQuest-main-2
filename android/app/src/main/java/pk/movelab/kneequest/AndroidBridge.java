@@ -38,7 +38,7 @@ public class AndroidBridge {
     public String getContext() {
         try {
             JSONObject o = new JSONObject();
-            o.put("app", BuildConfig.ROLE);
+            o.put("app", "virtual-therapy");
             o.put("preview", BuildConfig.DEBUG);          // debug builds keep the mouse "preview" button for testing without a camera
             o.put("publicBase", BuildConfig.PUBLIC_BASE);
             return o.toString();

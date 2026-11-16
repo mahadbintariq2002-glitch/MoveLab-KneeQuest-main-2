@@ -13,6 +13,21 @@ export const MARITAL   = ["Single", "Married", "Widowed", "Divorced"];
 export const KL_GRADES = [ {v:1,label:"Grade 1 (doubtful)"}, {v:2,label:"Grade 2 (mild)"}, {v:3,label:"Grade 3 (moderate)"}, {v:4,label:"Grade 4 (severe)"} ];
 export const TUG_DEVICES = ["None", "Cane", "Walker", "Crutches", "Other"];
 
+// The exercise games, in hub order. A participant's `games` field (array of ids) is their prescription;
+// missing / null means "all games" (participants enrolled before prescriptions existed keep everything).
+export const GAMES = [
+  { id:"quad",  name:"Quad Press",    emoji:"💪", exercise:"Quad Isometrics" },
+  { id:"slr",   name:"Lift-Off",      emoji:"🎈", exercise:"Straight Leg Raise" },
+  { id:"heel",  name:"Trace the Arc", emoji:"🌈", exercise:"Heel Slides / ROM" },
+  { id:"tke",   name:"Lock the Slot", emoji:"🔩", exercise:"Terminal Knee Extension" },
+  { id:"tempo", name:"Tempo Lift",    emoji:"⏱️", exercise:"Resisted Knee Extension" },
+  { id:"ham",   name:"Reel It In",    emoji:"🎣", exercise:"Hamstring Curl" },
+  { id:"bal",   name:"Steady Scales", emoji:"⚖️", exercise:"Static Balance" },
+];
+export const GAME_IDS = GAMES.map(g => g.id);
+// The games a participant may play: their prescription filtered to known ids, or every game when none is set.
+export const assignedGames = p => { const a = p && Array.isArray(p.games) ? p.games.filter(id => GAME_IDS.includes(id)) : null; return a && a.length ? a : GAME_IDS.slice(); };
+
 // ── WOMAC (LK 3.1, 0–4 per item): Pain 5 + Stiffness 2 + Function 17 = 24 items, total 0–96, higher = worse.
 // Item wording is licensed, so the form uses the standard item numbering only; the researcher enters the
 // scores from their licensed form. (Domain order and counts are the instrument's own structure.)

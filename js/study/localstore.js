@@ -1,7 +1,7 @@
 // localstore.js — study data kept in this browser's localStorage. Same interface as the cloud store,
 // so the whole app runs (and can be demonstrated/tested) before a cloud project exists. In this mode
 // the researcher dashboard and the participant app share one device — it is NOT remote tracking.
-import { DEFAULTS, formatStudyId, makeAccessCode, normalizeCode, normalizeCnic, finalizeAssessment, validateParticipant, sessionTime } from "./schema.js";
+import { DEFAULTS, formatStudyId, makeAccessCode, normalizeCode, normalizeCnic, finalizeAssessment, validateParticipant, sessionTime, assignedGames } from "./schema.js";
 
 const KEY = "movelab_study_v1", PKEY = "movelab_participant_v1";
 const blank = () => ({ participants:{}, identities:{}, assessments:[], sessions:[], consents:{}, settings:{...DEFAULTS}, counter:0 });
@@ -27,10 +27,10 @@ export function createLocalStore(){
       return Object.values(db.participants).sort((a,b)=>a.studyId.localeCompare(b.studyId)).map(p => ({...clone(p), consentAt:(db.consents[p.studyId]||{}).at||null}));
     },
     async getParticipant(id){ const db = read(), p = db.participants[id]; return p ? {...clone(p), consentAt:(db.consents[id]||{}).at||null} : null; },
-    async registerParticipant({ name, cnic, demographics, group }){
+    async registerParticipant({ name, cnic, demographics, group, games }){
       const errs = validateParticipant({ name, cnic, demographics }); if(errs.length) throw new Error(errs.join(" "));
       const db = read(); db.counter++; const studyId = formatStudyId(db.counter), accessCode = makeAccessCode();
-      db.participants[studyId] = { studyId, group: group||null, demographics: clone(demographics), accessCode, enrolledAt: Date.now() };
+      db.participants[studyId] = { studyId, group: group||null, games: Array.isArray(games) && games.length ? games.slice() : null, demographics: clone(demographics), accessCode, enrolledAt: Date.now() };
       db.identities[studyId] = { studyId, name: name.trim(), cnic: normalizeCnic(cnic) };
       write(db); return { studyId, accessCode };
     },
@@ -58,6 +58,9 @@ export function createLocalStore(){
       current(){ try{ return JSON.parse(localStorage.getItem(PKEY)); }catch(e){ return null; } },
       async setLang(lang){ const s = this.current(); if(s){ s.lang = lang; localStorage.setItem(PKEY, JSON.stringify(s)); } },
       async logout(){ localStorage.removeItem(PKEY); },
+      // The games the researcher assigned to this participant; cached in the sign-in record for offline use.
+      async plan(){ const s = this.current(); if(!s) return null; const p = read().participants[s.studyId];
+        const games = assignedGames(p); s.games = games; localStorage.setItem(PKEY, JSON.stringify(s)); return { games }; },
       async hasConsent(){ const s = this.current(); return !!(s && read().consents[s.studyId]); },
       async saveConsent(c){ const s = this.current(); if(!s) throw new Error("Not signed in."); const db = read(); db.consents[s.studyId] = { ...c, at: Date.now() }; write(db);
         s.consented = true; localStorage.setItem(PKEY, JSON.stringify(s)); },
@@ -93,7 +96,7 @@ function generateDemo(db){
     const [weeks, perWeek, fade, painful, sev0, kl, group] = pr;
     db.counter++; const studyId = formatStudyId(db.counter); created.push(studyId);
     const enrolled = now - weeks*7*day;
-    db.participants[studyId] = { studyId, group, demo:true, accessCode: makeAccessCode(), enrolledAt: enrolled, demographics: {
+    db.participants[studyId] = { studyId, group, demo:true, games: i === 1 ? ["quad","slr","tke"] : null, accessCode: makeAccessCode(), enrolledAt: enrolled, demographics: {
       age: 48 + Math.floor(R()*22), gender: i%3===0 ? "Male" : "Female", residence: pick(["Lahore (urban)","Faisalabad (urban)","Sheikhupura (rural)","Multan (urban)"]),
       education: pick(["Primary","Matric / Secondary","Intermediate","Graduate"]), occupation: pick(["Housewife","Shopkeeper","Teacher","Retired","Farmer"]),
       marital: "Married", painDurationMonths: 10 + Math.floor(R()*70), klGrade: kl } };

@@ -1,7 +1,7 @@
 // participant.js — participant sign-in (study ID + access code), consent and safety notice, then the games.
 import { getStore } from "./store.js";
 import { T, setLang, getLang, initLang } from "../okc/i18n.js";
-import { normalizeCode } from "./schema.js";
+import { normalizeCode, GAMES } from "./schema.js";
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
@@ -12,6 +12,7 @@ let store;
   store = await getStore();
   const q = new URLSearchParams(location.search);
   if(q.get("signout")){ await store.participant.logout(); history.replaceState(null, "", location.pathname); }
+  try{ localStorage.setItem("vt_role", "patient"); }catch(e){}           // next launch of the app opens the patient side
   const cur = store.participant.current();
   initLang(q.get("lang") || (cur && cur.lang));
   document.querySelectorAll(".langbar button").forEach(b => b.onclick = async () => { setLang(b.dataset.l); if(store.participant.setLang) await store.participant.setLang(b.dataset.l); render(); });
@@ -20,7 +21,8 @@ let store;
 
 function chrome(){
   document.querySelectorAll(".langbar button").forEach(b => b.classList.toggle("on", b.dataset.l === getLang()));
-  $("#rlink").textContent = T("Researcher sign-in");
+  $("#rlink").textContent = "← " + T("Change role");
+  document.title = T("Virtual Therapy");
 }
 function render(){
   chrome();
@@ -33,7 +35,7 @@ function render(){
 const demoNote = () => store.mode === "local" ? `<p class="muted small" style="margin-top:14px">${esc(T("Demo mode: your data stays on this device."))}</p>` : "";
 
 function viewLogin(){
-  $("#view").innerHTML = `<div class="pcard"><h1 style="text-align:center">🦵 ${esc(T("MoveLab exercise study"))}</h1>
+  $("#view").innerHTML = `<div class="pcard"><h1 style="text-align:center">🦵 ${esc(T("Virtual Therapy"))}</h1><p style="text-align:center;font-weight:700;margin:0 0 4px">${esc(T("Patient"))}</p>
     <p class="muted" style="text-align:center">${esc(T("Enter the Study ID and access code your therapist gave you."))}</p><div id="err"></div>
     <form id="f"><div class="field"><label>${esc(T("Study ID"))}</label><input id="sid" placeholder="P001" autocomplete="username" autocapitalize="characters" required></div>
     <div class="field"><label>${esc(T("Access code"))}</label><input id="code" placeholder="ABCD-EFGH" autocomplete="current-password" autocapitalize="characters" required></div>
@@ -60,7 +62,12 @@ function viewConsent(cur){
 }
 
 function viewReady(cur){
+  const list = ids => ids.map(id => GAMES.find(g => g.id === id)).filter(Boolean).map(g => `<li>${g.emoji} ${esc(T(g.name))}</li>`).join("");
   $("#view").innerHTML = `<div class="pcard" style="text-align:center"><h1>${esc(T("Welcome"))}</h1><p class="muted" style="font-size:18px">${esc(T("Study ID"))}: <b>${esc(cur.studyId)}</b></p>
-    <p>${esc(T("Do your exercises with the camera on, and tell us honestly how your knee feels."))}</p><a class="btn" href="okc.html">${esc(T("Start exercises"))}</a>
+    <p>${esc(T("Do your exercises with the camera on, and tell us honestly how your knee feels."))}</p>
+    <h3 style="margin-top:10px">${esc(T("Your exercises"))}</h3><ul class="gamelist" id="gl">${list(cur.games || GAMES.map(g => g.id))}</ul>
+    <a class="btn" href="okc.html">${esc(T("Start exercises"))}</a>
     <p style="margin-top:14px"><a href="?signout=1">${esc(T("Sign out"))}</a></p>${demoNote()}</div>`;
+  // fetch the latest prescription from the researcher (cached on the phone for offline use)
+  if(store.participant.plan) store.participant.plan().then(p => { if(p && $("#gl")) $("#gl").innerHTML = list(p.games); }).catch(() => {});
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>MoveLab — Participant</title>
+<title>Virtual Therapy — Patient</title>
 <link rel="stylesheet" href="css/study.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=swap">
 </head>
@@ -11,9 +11,8 @@
 <div class="pwrap">
   <div class="langbar"><button data-l="en">English</button><button data-l="ur">اردو</button></div>
   <div id="view"></div>
-  <p class="muted small" style="text-align:center;margin-top:18px"><a href="researcher.html" id="rlink">Researcher sign-in</a></p>
+  <p class="muted small" style="text-align:center;margin-top:18px"><a href="therapy.html?choose=1" id="rlink">Change role</a></p>
 </div>
-<script>if(window.AndroidBridge){ var rl=document.getElementById("rlink"); if(rl&&rl.parentNode) rl.parentNode.style.display="none"; }  /* the patient app has no researcher area */</script>
 <script type="module" src="js/study/participant.js"></script>
 </body>
 </html>
