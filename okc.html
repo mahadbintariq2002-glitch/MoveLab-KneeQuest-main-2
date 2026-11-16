@@ -162,7 +162,7 @@
 
 <div class="toast" id="toast"></div>
 <script>
-if("serviceWorker" in navigator){
+if("serviceWorker" in navigator && !window.AndroidBridge){   // the Android app ships these files itself — no offline cache layer needed
   let refreshing=false;
   navigator.serviceWorker.addEventListener("controllerchange",()=>{ if(refreshing)return; refreshing=true; location.reload(); });
   window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));

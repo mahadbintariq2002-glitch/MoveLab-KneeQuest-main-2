@@ -15,7 +15,10 @@ const fmtDate = t => t ? new Date(t).toLocaleDateString(undefined, { day:"numeri
 const fmtDT = t => t ? new Date(t).toLocaleString(undefined, { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) : "—";
 const ago = t => { if(!t) return "never"; const d = Math.floor((Date.now()-t)/86400000); return d <= 0 ? "today" : d === 1 ? "yesterday" : d + " days ago"; };
 const r1 = v => v == null ? "—" : (Math.round(v*10)/10);
-function download(name, text){ const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type:"text/csv;charset=utf-8" })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+// Inside the Android researcher app a blob download goes nowhere, so the file is handed to the app (it opens the share sheet: Drive, WhatsApp, email…).
+const droid = () => { const b = typeof window !== "undefined" && window.AndroidBridge; return b || null; };
+const patientUrl = () => { try{ const b = droid(); if(b && b.getContext){ const c = JSON.parse(b.getContext() || "{}"); if(c.publicBase) return c.publicBase + "participant.html"; } }catch(e){} return location.origin + location.pathname.replace(/researcher\.html$/, "participant.html"); };
+function download(name, text){ const b = droid(); if(b && b.saveFile){ try{ b.saveFile(name, "text/csv", text); return; }catch(e){} } const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type:"text/csv;charset=utf-8" })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 const pdur = m => m >= 12 ? `${Math.floor(m/12)} y${m%12 ? " " + (m%12) + " m" : ""}` : `${m} m`;
 const camera = list => list.filter(s => s.inputMode !== "mouse");
 
@@ -118,13 +121,13 @@ function viewAdd(){
 }
 function showCreated(id, code){
   app.innerHTML = `<div class="card" style="max-width:560px;margin:20px auto;text-align:center"><div class="ok">Participant created</div>
-    <p class="muted">Give these to the participant. They sign in at <b>${esc(location.origin + location.pathname.replace(/researcher\.html$/, "participant.html"))}</b></p>
+    <p class="muted">Give these to the participant. They sign in at <b>${esc(patientUrl())}</b> (or in the MoveLab patient app)</p>
     <p class="muted small" style="margin:0">Study ID</p><div class="codebox" style="margin-bottom:10px">${esc(id)}</div>
     <p class="muted small" style="margin:0">Access code</p><div class="codebox">${esc(code)}</div>
     <div class="row" style="justify-content:center;margin-top:16px"><button class="btn ghost" id="cp">Copy both</button><button class="btn ghost" id="pr">Print card</button><a class="btn" href="#/assess/${id}">Record baseline</a><a class="btn ghost" href="#/p/${id}">Open participant</a></div>
     <p class="muted small" style="margin-top:12px">You can see this code again under the participant's “Details & access” tab.</p></div>`;
-  $("#cp").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(`Study ID: ${id}\nAccess code: ${code}`); toast("Copied"); };
-  $("#pr").onclick = () => { const w = open("", "_blank"); w.document.write(`<body style="font:20px system-ui;padding:30px"><h2>MoveLab study</h2><p>Study ID: <b>${esc(id)}</b></p><p>Access code: <b style="letter-spacing:.12em">${esc(code)}</b></p><p>Sign in at: ${esc(location.origin + location.pathname.replace(/researcher\.html$/, "participant.html"))}</p></body>`); w.print(); };
+  $("#cp").onclick = () => { const msg = `Study ID: ${id}\nAccess code: ${code}`; const b = droid(); if(b && b.shareText){ try{ b.shareText("MoveLab study access", msg + "\nSign in at: " + patientUrl()); return; }catch(e){} } navigator.clipboard && navigator.clipboard.writeText(msg); toast("Copied"); };
+  $("#pr").onclick = () => { if(droid()){ $("#cp").click(); return; } const w = open("", "_blank"); w.document.write(`<body style="font:20px system-ui;padding:30px"><h2>MoveLab study</h2><p>Study ID: <b>${esc(id)}</b></p><p>Access code: <b style="letter-spacing:.12em">${esc(code)}</b></p><p>Sign in at: ${esc(location.origin + location.pathname.replace(/researcher\.html$/, "participant.html"))}</p></body>`); w.print(); };
 }
 
 // ── participant detail ───────────────────────────────────────────────────────────────────────
@@ -211,7 +214,7 @@ async function tabDetails(p, as){
     <p class="muted small" style="margin-top:8px">A new code signs the participant out of their devices; they enter the new code to continue.</p></div></div>`;
   $("#grp").onchange = async e => { await store.updateParticipant(p.studyId, { group: e.target.value || null }); toast("Group updated"); };
   $("#reveal").onclick = async () => { const i = await store.getIdentity(p.studyId); $("#idbox").innerHTML = i ? `<dl class="kv"><dt>Name</dt><dd>${esc(i.name)}</dd><dt>CNIC</dt><dd>${esc(i.cnic)}</dd></dl>` : `<span class="muted">Not found</span>`; };
-  $("#cpc").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(`Study ID: ${p.studyId}\nAccess code: ${$("#codev").textContent}`); toast("Copied"); };
+  $("#cpc").onclick = () => { const b = droid(); if(b && b.shareText){ try{ b.shareText("MoveLab study access", `Study ID: ${p.studyId}\nAccess code: ${$("#codev").textContent}\nSign in at: ${patientUrl()}`); return; }catch(e){} } navigator.clipboard && navigator.clipboard.writeText(`Study ID: ${p.studyId}\nAccess code: ${$("#codev").textContent}`); toast("Copied"); };
   $("#newc").onclick = async () => { if(!confirm("Issue a new access code? The old one stops working.")) return; $("#codev").textContent = await store.resetAccessCode(p.studyId); toast("New code issued"); };
 }
 

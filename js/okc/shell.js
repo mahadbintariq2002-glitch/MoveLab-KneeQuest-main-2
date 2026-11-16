@@ -189,7 +189,7 @@ function openCalib(){ showScreen("calibScreen"); $("calibScreen").classList.remo
       $("calHint").innerHTML = denied
         ? T("⚠ Camera blocked. Tap <b>Play with camera</b> again and choose <b>Allow</b>. On a phone use Chrome/Safari (an embedded preview can't use the camera).")
         : T("Camera error:")+" "+(e.message||e); } };
-  $("calMouse").style.display = Sync.context().source==="android" ? "none" : "";   // in the patient app only the camera counts
+  $("calMouse").style.display = (Sync.context().source==="android" && !Sync.context().preview) ? "none" : "";   // in the patient app only the camera counts (debug builds keep the mouse preview)
   $("calMouse").onclick=()=>{ mode="mouse"; $("pipWrap").style.display="none"; startGame(); };
   $("calSet").onclick=()=>{
     if(curDef.calib==="balance"){ const bl=pose.m.bal;

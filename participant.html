@@ -13,6 +13,7 @@
   <div id="view"></div>
   <p class="muted small" style="text-align:center;margin-top:18px"><a href="researcher.html" id="rlink">Researcher sign-in</a></p>
 </div>
+<script>if(window.AndroidBridge){ var rl=document.getElementById("rlink"); if(rl&&rl.parentNode) rl.parentNode.style.display="none"; }  /* the patient app has no researcher area */</script>
 <script type="module" src="js/study/participant.js"></script>
 </body>
 </html>
