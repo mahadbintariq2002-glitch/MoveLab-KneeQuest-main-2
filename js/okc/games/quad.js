@@ -2,15 +2,19 @@
 // Straighten the knee toward FULL EXTENSION and HOLD. The charge fills ONLY when
 // the knee angle is near 180° (extended); flexing can never fill it.
 // Proper rep cycle: EXTEND+hold → rep → must RELAX (bend back) before the next.
-import { HoldDecay, Steady, starsFor } from "../rehab.js";
+import { HoldDecay, Steady, ZoneGate, starsFor } from "../rehab.js";
 
 // tol = degrees below the patient's calibrated full extension still counted as "extended".
-// The bar fills ONLY when kneeAngle >= extRef - tol, so even ~10° of flexion won't fill it.
+// The bar fills ONLY when kneeAngle >= extRef - tol. A 2-D camera knee angle carries ~±3° of jitter, so the zone
+// has a HYSTERESIS margin (enter at extRef−tol, leave only below extRef−tol−GATE) — a held, straight knee no longer
+// flickers in and out at the edge — and brief tracking dropouts pause the hold instead of draining it.
 const DIFFS = {
-  gentle:   { tol:6, holdSecs:6,  reps:3, decay:0.8 },
-  steady:   { tol:4, holdSecs:9,  reps:4, decay:1.1 },
-  champion: { tol:3, holdSecs:12, reps:5, decay:1.5 },
+  gentle:   { tol:8, holdSecs:6,  reps:3, decay:0.5 },
+  steady:   { tol:6, holdSecs:9,  reps:4, decay:0.7 },
+  champion: { tol:4, holdSecs:12, reps:5, decay:1.0 },
 };
+const GATE = 3;          // ° of hysteresis below the zone edge
+const RELAX_SECS = 5;    // a quad set relaxes the muscle, not necessarily the knee angle: a 5-s rest also re-arms the next rep
 
 class QuadPress {
   constructor(ctx){
@@ -19,8 +23,9 @@ class QuadPress {
     this.holdSecs = ctx.holdSecs || this.d.holdSecs;
     this.extRef = ctx.extRef || 178;                 // patient's calibrated full-extension angle
     this.extAngle = this.extRef - this.d.tol;        // fill only at/above this
-    this.relaxAngle = this.extRef - 32;              // must bend back below this to arm next rep
-    this.hold=new HoldDecay({holdSecs:this.holdSecs, decay:this.d.decay});
+    this.relaxAngle = this.extRef - 15;              // bending back past this also re-arms the next rep straight away
+    this.hold=new HoldDecay({holdSecs:this.holdSecs, decay:this.d.decay, grace:0.8});
+    this.gate=new ZoneGate(GATE); this.relaxT=0;
     this.steady=new Steady(20, 6);
     this.score=0; this.qSum=0; this.qN=0; this.reps=0; this.repsTarget=ctx.repsTarget||this.d.reps;
     this.phase="extend"; this.roller=0.2; this.glow=0; this.zonePulse=0; this.rot=0; this.t=0;
@@ -34,18 +39,18 @@ class QuadPress {
     const angle = m.kneeAngle;                          // 180 = full extension (absolute, precise for logic)
     const tracked = m.tracked && angle!=null; this.angle=tracked?angle:null; this.conf=m.conf||0;
     this.angleDisp = tracked ? (m.kneeAngleDisp!=null?m.kneeAngleDisp:angle) : null;   // steady number for display
-    const inZone = tracked && angle >= this.extAngle; // ONLY within tol of full extension
+    const inZone = tracked && this.gate.update(angle, this.extAngle, 999); // within tol of full extension (with hysteresis)
     this.inZone=inZone;
     if(tracked) this.steady.push(angle);
     const steadiness = inZone ? this.steady.value() : 0;
 
     if(this.phase==="extend"){
-      const r=this.hold.update(inZone, dt, now/1000);
+      const r=this.hold.update(inZone, dt, now/1000, !tracked);   // camera dropout pauses, does not drain
       if(inZone){ this.score += dt*12*(0.5+0.5*steadiness); this.qSum+=steadiness; this.qN++; this._emitStream(); }
       if(r.justRep){ this.reps++; this.score+=60; this._burst(); this.pop("+60 ✨"); this.audio&&this.audio.reward(); this.onEvent({type:"rep",reps:this.reps});
         if(this.reps>=this.repsTarget){ this._finish(); return; }
-        this.phase="relax"; this.hold.reset(); }
-    } else { this.hold.p=0; if(tracked && angle <= this.relaxAngle){ this.phase="extend"; } }
+        this.phase="relax"; this.relaxT=0; this.hold.reset(); this.gate.reset(); }
+    } else { this.hold.p=0; this.relaxT+=dt; if((tracked && angle <= this.relaxAngle) || this.relaxT>=RELAX_SECS){ this.phase="extend"; this.gate.reset(); } }
 
     // roller: straighter (higher angle) presses up into the zone; bending drops it
     const target = tracked ? Math.max(0,Math.min(1,(angle-90)/90)) : 0.2;
@@ -54,7 +59,7 @@ class QuadPress {
     this.zonePulse=(Math.sin(this.t*3)+1)/2;
 
     if(!tracked) this.fb={text:"📷 Show your whole leg to the camera",color:"#ffb84d"};
-    else if(this.phase==="relax") this.fb={text:"Relax — bend your knee back to reset",color:"#ff9ec7"};
+    else if(this.phase==="relax") this.fb={text:`Relax your thigh — next rep in ${Math.max(1,Math.ceil(RELAX_SECS-this.relaxT))}s`,color:"#ff9ec7"};
     else if(!inZone) this.fb={text:"Straighten your knee fully →",color:"#37e1ff"};
     else this.fb = steadiness>0.6 ? {text:"Perfect — hold it! 💪",color:"#8affc0"} : {text:"Hold steady…",color:"#ffb84d"};
 
@@ -110,7 +115,7 @@ class QuadPress {
 
 export default {
   id:"quad", name:"Quad Press", emoji:"💪", exercise:"Quad Isometrics", camera:"Sagittal (side-on)",
-  howto:"Sit or lie side-on. <b>Straighten your knee fully</b> (toward 180°) to press the roller into the green zone and <b>hold steady</b> — then <b>relax (bend back)</b> before the next rep. Flexing does not charge.",
+  howto:"Sit or lie side-on. <b>Straighten your knee fully</b> (toward 180°) to press the roller into the green zone and <b>hold steady</b> — then <b>relax your thigh</b> for a few seconds before the next rep. Flexing does not charge.",
   calib:"extension", diffs:Object.keys(DIFFS),
   make(ctx){ return new QuadPress(ctx); },
 };

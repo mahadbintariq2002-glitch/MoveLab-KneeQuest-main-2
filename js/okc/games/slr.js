@@ -6,7 +6,12 @@
 //   hipAngle   shoulder–hip–knee angle → leg elevation = baseline(rest) − hipAngle
 //   kneeAngle  hip–knee–ankle (180=straight) → knee must stay within kneeTol of the
 //              patient's own calibrated extension (extRef), not an assumed 180°
-import { HoldDecay, Steady, starsFor } from "../rehab.js";
+import { HoldDecay, Steady, ZoneGate, starsFor } from "../rehab.js";
+// Precision: the raise is measured from the patient's OWN resting leg position (captured for 1.5 s at the start and
+// refreshed between reps) instead of an assumed perfectly flat 180° — so a slightly raised trunk or a pillow doesn't
+// shift the target. The altitude band and the "knee straight" check both have hysteresis, and tracking dropouts
+// pause the hold instead of draining it.
+const BASE_SECS = 1.5, BAND_GATE = 3, KNEE_GATE = 4;
 
 const DIFFS = {
   gentle:   { target:18, band:12, reps:3, kneeTol:22, decay:0.6, low:8 },
@@ -21,7 +26,8 @@ class LiftOff {
     this.extRef = ctx.extRef || 178;         // patient's calibrated full-extension angle (0° reference)
     this.holdSecs = ctx.holdSecs || 6;
     this.maxElev = this.d.target + this.d.band + 18;
-    this.hold=new HoldDecay({holdSecs:this.holdSecs, decay:this.d.decay});
+    this.hold=new HoldDecay({holdSecs:this.holdSecs, decay:this.d.decay, grace:0.8});
+    this.bandGate=new ZoneGate(BAND_GATE); this.kneeGate=new ZoneGate(KNEE_GATE); this.baseBuf=[]; this.baseT=0;
     this.steady=new Steady(20, 6);
     this.score=0; this.qSum=0; this.qN=0; this.reps=0; this.repsTarget=ctx.repsTarget||this.d.reps;
     this.phase="raise";                      // "raise" (charge) | "lower" (bring leg down to arm next)
@@ -36,20 +42,32 @@ class LiftOff {
     if(this.done) return; this.t+=dt;
     const tracked = m.tracked && m.hipAngle!=null; this.tracked=tracked; this.conf=m.conf||0;
     // leg elevation = hip flexion (shoulder–hip–knee); ~0 lying flat, grows as the straight leg raises
-    const elev = tracked ? Math.max(0, 180 - m.hipAngle) : 0; this.elev=elev;
-    const kneeStraight = tracked && m.kneeAngle!=null && m.kneeAngle >= (this.extRef - this.d.kneeTol); this.kneeStraight=kneeStraight;
-    const inBand = tracked && elev >= this.d.target - this.d.band && elev <= this.d.target + this.d.band;
+    const rawElev = tracked ? Math.max(0, 180 - m.hipAngle) : 0;
+    // resting baseline: median of the first 1.5 s of tracking with the leg down (shown as "measuring")
+    if(this.baseline==null && m.mouse) this.baseline=0;                 // mouse preview: no resting position to measure
+    if(this.baseline==null){
+      if(tracked){ this.baseBuf.push(rawElev); this.baseT+=dt; }
+      if(this.baseT>=BASE_SECS){ const s=[...this.baseBuf].sort((a,b)=>a-b); this.baseline=Math.min(25, s[s.length>>1]); }
+      this.elev=0; this.tracked=tracked; this.kneeStraight=tracked;
+      this.fb = tracked ? {text:"Rest your leg flat — measuring your starting position…",color:"#37e1ff"} : {text:"📷 Lie side-on — show your whole leg",color:"#ffb84d"};
+      this._step(dt); return;
+    }
+    const elev = tracked ? Math.max(0, rawElev - this.baseline) : 0; this.elev=elev;
+    const kneeStraight = tracked && m.kneeAngle!=null && this.kneeGate.update(m.kneeAngle, this.extRef - this.d.kneeTol, 999); this.kneeStraight=kneeStraight;
+    const inBand = tracked && this.bandGate.update(elev, this.d.target - this.d.band, this.d.target + this.d.band);
     const inZone = inBand && kneeStraight;
     if(tracked) this.steady.push(elev);
     const steadiness = inZone ? this.steady.value() : 0;
 
     if(this.phase==="raise"){
-      const r=this.hold.update(inZone, dt, now/1000);
+      const r=this.hold.update(inZone, dt, now/1000, !tracked);   // camera dropout pauses, does not drain
       if(inZone){ this.score += dt*12*(0.5+0.5*steadiness); this.qSum+=steadiness; this.qN++; }
       if(r.justRep){ this.reps++; this.score+=60; this._burst(); this.pop("Lift-off! +60"); this.audio&&this.audio.reward(); this.onEvent({type:"rep",reps:this.reps});
         if(this.reps>=this.repsTarget){ this._finish(); return; }
         this.phase="lower"; this.hold.reset(); }
-    } else { this.hold.p=0; if(tracked && elev <= this.d.low){ this.phase="raise"; } }
+    } else { this.hold.p=0;
+      // leg resting again: let the baseline follow the true resting position (slowly), then arm the next rep
+      if(tracked && elev <= this.d.low){ this.baseline += (Math.min(25, rawElev) - this.baseline) * Math.min(1, dt*0.8); this.phase="raise"; this.bandGate.reset(); } }
 
     // visuals
     const frac = Math.max(0,Math.min(1, elev/this.maxElev));
@@ -129,6 +147,6 @@ export default {
   howto:"Lie side-on. Keep your <b>knee straight</b> and <b>raise your whole leg</b> to float the balloon into the target band, then <b>hold</b>. A bent knee makes it wobble. Lower to reset.",
   calib:"extension", diffs:Object.keys(DIFFS),
   // mouse-preview: pointer height → leg elevation, knee assumed straight
-  mouseMetrics(p){ const raise=(1-p)*70; return { tracked:true, conf:1, flex:3, kneeFlex:3, kneeAngle:177, hipAngle:180-raise, ankle:{x:0.5,y:p}, side:"L" }; },
+  mouseMetrics(p){ const raise=(1-p)*70; return { tracked:true, mouse:true, conf:1, flex:3, kneeFlex:3, kneeAngle:177, hipAngle:180-raise, ankle:{x:0.5,y:p}, side:"L" }; },
   make(ctx){ return new LiftOff(ctx); },
 };

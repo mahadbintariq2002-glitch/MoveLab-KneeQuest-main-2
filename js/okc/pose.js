@@ -33,7 +33,7 @@ export class PoseController {
   get CONNECTIONS(){ return PoseLandmarker.POSE_CONNECTIONS; }
 
   // "side" = knee-angle games (default). "front" = standing balance: reads the person facing the camera.
-  setView(v){ this.view = v==="front" ? "front" : "side"; this.kneeMed.length=0; this.hipMed.length=0;
+  setView(v){ this.view = v==="front" ? "front" : "side"; this.kneeMed.length=0; this.hipMed.length=0; this._resetFront();
     const m=this.m; m.tracked=false; m.bal=null; m.side=null; m.kneeAngle=null; m.kneeAngleDisp=null; m.kneeFlex=null; m.hipAngle=null; this.kneeDisp=null; }
 
   async load(onMsg){ if(this.landmarker) return; onMsg&&onMsg("Loading tracker… (first time ~10 MB)");
@@ -61,7 +61,7 @@ export class PoseController {
       const raw=res.landmarks[pi], t=now/1000, asp=(v.videoWidth/v.videoHeight)||(16/9);
       const sm=raw.map((p,i)=>({x:this.fX[i].filt(p.x,t),y:this.fY[i].filt(p.y,t),z:p.z,visibility:vis(p)}));
       this.smLandmarks=sm;                                        // for a smooth skeleton overlay
-      if(this.view==="front"){ this._frontal(sm,asp); return m; }
+      if(this.view==="front"){ this._frontal(sm,asp,t); return m; }
       m.bal=null;
       const cL=Math.min(vis(sm[HIP.L]),vis(sm[KNEE.L]),vis(sm[ANK.L]));
       const cR=Math.min(vis(sm[HIP.R]),vis(sm[KNEE.R]),vis(sm[ANK.R]));
@@ -94,7 +94,14 @@ export class PoseController {
   //            Axis comes from the ankle landmarks themselves, so it is independent of image mirroring.
   //   weight on the left leg ≈ 0.5 + shift/2 (static: centre of mass splits load between the feet in
   //   proportion to its distance from each) — a position-based estimate, NOT a force measurement.
-  _frontal(sm, asp){
+  // Stability: a 1-pixel wobble of the hip or ankle points is ~5–10 % "weight" at normal stance widths, so
+  //   • the FEET form a slow-moving reference (they barely move in quiet standing): ankle midpoint, axis and stance
+  //     width are averaged over ~2 s and only re-anchored if the person actually steps;
+  //   • shift / trunk lean / foot-height then pass a 9-frame median (spike rejection) and a slow One-Euro filter.
+  _resetFront(){ this.feet=null; this.shiftMed=[]; this.leanMed=[]; this.dyMed=[];
+    this.shiftF=new OneEuro(0.35,0.02); this.leanF=new OneEuro(0.35,0.02); this.dyF=new OneEuro(0.8,0.05); }
+  _frontal(sm, asp, tSec){
+    if(!this.shiftF) this._resetFront();
     const m=this.m, P=i=>({x:sm[i].x*asp, y:sm[i].y}), mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
     const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
     m.kneeAngle=null; m.kneeAngleDisp=null; m.kneeFlex=null; m.hipAngle=null; m.side=null; m.bodyOk=false; m.sideOnOk=false; this.kneeMed.length=0;
@@ -106,14 +113,26 @@ export class PoseController {
     const frontOk = bodyOk && shW/torso>=FRONT_RATIO;
     const standingOk = bodyOk && legLen/torso>=STAND_RATIO;
     const stanceOk = bodyOk && stance/legLen>=STANCE_MIN;
-    let shift=0, trunkLean=0;
+    let shift=0, trunkLean=0, dyN=0;
     if(bodyOk && stance>1e-6){
-      const ux=(aL.x-aR.x)/stance, uy=(aL.y-aR.y)/stance;
-      shift=((hp.x-ak.x)*ux+(hp.y-ak.y)*uy)/(stance/2);
-      trunkLean=((sh.x-hp.x)*ux+(sh.y-hp.y)*uy)/torso;           // upper-body lean toward the left foot (+), ~sin(angle)
-    }
+      // slow feet reference; re-anchor only when the feet really move (a step), not for camera jitter
+      const F=this.feet;
+      if(!F || Math.hypot(ak.x-F.ak.x, ak.y-F.ak.y) > 0.22*F.stance || Math.abs(stance-F.stance) > 0.22*F.stance){
+        this.feet={ ak:{...ak}, ux:(aL.x-aR.x)/stance, uy:(aL.y-aR.y)/stance, stance };
+        this.shiftMed.length=0; this.leanMed.length=0;
+      } else { const k=0.03;                                       // ≈ 2 s time constant at 30 fps
+        F.ak.x+=(ak.x-F.ak.x)*k; F.ak.y+=(ak.y-F.ak.y)*k; F.stance+=(stance-F.stance)*k;
+        const ux=(aL.x-aR.x)/stance, uy=(aL.y-aR.y)/stance; F.ux+=(ux-F.ux)*k; F.uy+=(uy-F.uy)*k; const n=Math.hypot(F.ux,F.uy)||1; F.ux/=n; F.uy/=n; }
+      const R=this.feet, push=(buf,v,n)=>{ buf.push(v); if(buf.length>n) buf.shift(); return median(buf); };
+      const rawShift=((hp.x-R.ak.x)*R.ux+(hp.y-R.ak.y)*R.uy)/(R.stance/2);
+      const rawLean=((sh.x-hp.x)*R.ux+(sh.y-hp.y)*R.uy)/torso;    // upper-body lean toward the left foot (+), ~sin(angle)
+      const t=tSec!=null ? tSec : performance.now()/1000;
+      shift=this.shiftF.filt(push(this.shiftMed, rawShift, 9), t);
+      trunkLean=this.leanF.filt(push(this.leanMed, rawLean, 9), t);
+      dyN=this.dyF.filt(push(this.dyMed, (aL.y-aR.y)/legLen, 7), t);
+    } else { this.feet=null; }
     const ok = bodyOk && frontOk && standingOk;
-    m.bal={ ok, bodyOk, frontOk, standingOk, stanceOk, shift, trunkLean, dyN: bodyOk?(aL.y-aR.y)/legLen:0 };
+    m.bal={ ok, bodyOk, frontOk, standingOk, stanceOk, shift, trunkLean, dyN };
     m.bodyOk=bodyOk; m.tracked=ok;
   }
 

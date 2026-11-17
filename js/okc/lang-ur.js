@@ -244,6 +244,8 @@ const exact = {
  "Stand <b>facing the camera</b>, feet shoulder-width apart on a <b>firm, flat floor</b> — keep a counter or sturdy chair within reach. Hold the scale <b>level</b>, then <b>shift your weight</b> onto your left leg and hold, return to the middle, then the right. Both feet stay flat.": "<b>کیمرے کی طرف منہ کر کے</b> کھڑے ہوں، پاؤں کندھوں کی چوڑائی پر <b>مضبوط ہموار فرش</b> پر — کوئی کاؤنٹر یا مضبوط کرسی ہاتھ کی پہنچ میں رکھیں۔ ترازو کو <b>برابر</b> رکھیں، پھر اپنا <b>وزن</b> بائیں ٹانگ پر منتقل کر کے روکیں، درمیان میں واپس آئیں، پھر دائیں پر۔ دونوں پاؤں ہموار رہیں۔",
  "📷 Show your whole leg to the camera": "📷 اپنی پوری ٹانگ کیمرے کو دکھائیں",
  "Relax — bend your knee back to reset": "ڈھیلا چھوڑیں — گھٹنا واپس موڑیں تاکہ دوبارہ تیار ہو",
+ "Rest your leg flat — measuring your starting position…": "ٹانگ سیدھی نیچے رکھیں — آپ کی ابتدائی پوزیشن ناپی جا رہی ہے…",
+ "Let's move on 👍": "آگے بڑھتے ہیں 👍",
  "Straighten your knee fully →": "اپنا گھٹنا پوری طرح سیدھا کریں",
  "Perfect — hold it! 💪": "بہترین — اسے روکے رکھیں! 💪",
  "Hold steady…": "ساکت رہیں…",
@@ -334,6 +336,9 @@ const exact = {
 };
 
 const patterns = [
+  [/^Relax your thigh — next rep in (\d+)s$/, m => `ران کو ڈھیلا چھوڑیں — اگلی دہرائی ${m[1]} سیکنڈ میں`],
+  [/^😮‍💨 Rest — relax or hold the chair\. Next round in (\d+)s$/, m => `😮‍💨 آرام کریں — چاہیں تو کرسی تھام لیں۔ اگلا راؤنڈ ${m[1]} سیکنڈ میں`],
+  [/^REST — NEXT ROUND IN (\d+)s$/, m => `آرام — اگلا راؤنڈ ${m[1]} سیکنڈ میں`],
   [/^confidence (\d+)%  ·  hold (\d+)s$/, m => `اعتماد ${m[1]} فیصد  ·  روکنے کا وقت ${m[2]} سیکنڈ`],
   [/^confidence (\d+)%$/, m => `اعتماد ${m[1]} فیصد`],
   [/^estimated from pelvis position · confidence (\d+)%$/, m => `کولہوں کی پوزیشن سے اندازہ · اعتماد ${m[1]} فیصد`],

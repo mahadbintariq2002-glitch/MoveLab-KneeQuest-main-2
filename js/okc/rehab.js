@@ -12,12 +12,16 @@ export class Steady{
 }
 
 // Hold-with-decay: fills while "inZone", decays when not. One rep = reach 1.0.
+//   grace  — seconds out of the zone before any progress is lost (a brief wobble costs nothing)
+//   freeze — pass true when the camera has lost the body: progress pauses instead of draining, because a
+//            tracking dropout is not the patient's fault.
 export class HoldDecay{
   constructor({holdSecs=10, decay=0.6, grace=0.35}={}){ this.cfg={holdSecs,decay,grace}; this.reset(); }
   configure(p){ Object.assign(this.cfg,p); }
   reset(){ this.p=0; this.reps=0; this._out=0; this._last=null; this.justRep=false; return this; }
-  update(inZone, dt, tSec){
+  update(inZone, dt, tSec, freeze=false){
     this.justRep=false;
+    if(freeze){ if(this._last!=null) this._last=tSec; return { progress:this.p, reps:this.reps, justRep:false }; }
     const fill=1/this.cfg.holdSecs;                 // progress per second while holding
     if(inZone){ this.p += dt*fill; this._last=tSec; }
     else if(this._last==null || (tSec-this._last)>this.cfg.grace){ this.p -= dt*fill*this.cfg.decay; } // decay at a fraction of fill speed
@@ -25,6 +29,15 @@ export class HoldDecay{
     this.p=Math.max(0,Math.min(1,this.p));
     return { progress:this.p, reps:this.reps, justRep:this.justRep };
   }
+}
+
+// Zone gate with hysteresis: entering needs the value inside [lo, hi]; once inside it stays "in" until the value
+// leaves [lo − margin, hi + margin]. Stops camera jitter at the edge of a target from flickering in/out.
+export class ZoneGate{
+  constructor(margin){ this.margin=margin; this.in=false; }
+  update(v, lo, hi){ if(v==null || Number.isNaN(v)){ this.in=false; return false; }
+    const m=this.in ? this.margin : 0; this.in = v >= lo - m && v <= hi + m; return this.in; }
+  reset(){ this.in=false; }
 }
 
 // Rep counter with hysteresis on a scalar crossing high→low→high (for curls/ROM).

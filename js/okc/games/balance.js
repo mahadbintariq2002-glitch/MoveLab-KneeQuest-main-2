@@ -10,13 +10,19 @@
 // Units: "shift" is in half-stance widths (0 = centred, ±1 = pelvis over a foot). For a
 // quasi-static stance, load on the left leg ≈ 50% + shift/2 — a POSITION-based estimate of
 // weight bearing, not a force reading (no force plate).
-import { HoldDecay, Steady, starsFor } from "../rehab.js";
+import { HoldDecay, Steady, ZoneGate, starsFor } from "../rehab.js";
 
+// Fatigue safety for KOA grade 2–3: side holds are capped (maxHold) whatever hold time was picked, every completed
+// round is followed by a rest, a stage that cannot be completed moves on after STAGE_MAX seconds, and standing
+// time for the whole session is capped (SESSION_MAX).
 const DIFFS = {
-  gentle:   { shiftT:0.35, band:0.12, centreTol:0.16, centreSecs:2,   reps:3 },   // ≈ 68% of weight on the target leg
-  steady:   { shiftT:0.50, band:0.11, centreTol:0.13, centreSecs:2.5, reps:4 },   // ≈ 75%
-  champion: { shiftT:0.65, band:0.10, centreTol:0.10, centreSecs:3,   reps:5 },   // ≈ 83%
+  gentle:   { shiftT:0.30, band:0.14, centreTol:0.20, centreSecs:2,   reps:3, maxHold:5,  rest:12 },   // ≈ 65% of weight on the target leg
+  steady:   { shiftT:0.45, band:0.12, centreTol:0.16, centreSecs:2,   reps:4, maxHold:7,  rest:10 },   // ≈ 72%
+  champion: { shiftT:0.60, band:0.11, centreTol:0.13, centreSecs:2.5, reps:5, maxHold:10, rest:8 },    // ≈ 80%
 };
+const STAGE_MAX = 25;        // s of tracked standing in one stage before we move on (no endless holding)
+const SESSION_MAX = 240;     // s of standing in total, then the session ends with the rounds completed so far
+const GATE_MARGIN = 0.05;    // hysteresis around the target zone (≈ 2.5 % body weight)
 const STAGES = ["centre","left","centre","right"];
 const FOOT_LIFT = 0.09;      // ankle-height difference (÷ leg length, vs. calibrated) that means a foot has left the floor
 const TRUNK_LEAN = 0.30;     // upper-body lean (≈17°) beyond calibrated upright → "shift with your hips" cue
@@ -29,9 +35,10 @@ class SteadyScales {
     this.d = DIFFS[ctx.difficulty]||DIFFS.gentle;
     const ref = ctx.balRef || {};                       // patient's calibrated neutral stance
     this.s0 = ref.shift0||0; this.t0 = ref.trunk0||0; this.dy0 = ref.dyN0||0;
-    this.holdSecs = ctx.holdSecs || 5;
-    this.hold = new HoldDecay({holdSecs:this.d.centreSecs, decay:0.9});
-    this.steady = new Steady(30, 0.18);
+    this.holdSecs = Math.min(ctx.holdSecs || this.d.maxHold, this.d.maxHold);
+    this.hold = new HoldDecay({holdSecs:this.d.centreSecs, decay:0.5, grace:0.9});
+    this.gate = new ZoneGate(GATE_MARGIN); this.footOutT=0; this.stageT=0; this.standT=0; this.rest=0; this.skipped=0;
+    this.steady = new Steady(30, 0.12);
     this.score=0; this.qSum=0; this.qN=0; this.reps=0; this.repsTarget=ctx.repsTarget||this.d.reps;
     this.si=0; this.arrived=false; this.sv=0; this.svPrev=0; this.vel=0; this.t=0; this.glow=0; this.shake=0;
     this.trail=[]; this.parts=[]; this.pops=[]; this.done=false; this.result=null;
@@ -49,35 +56,49 @@ class SteadyScales {
     if(this.done){ this._step(dt); return; } this.t+=dt;
     const b = m && m.bal, tracked = !!(m && m.tracked && b && b.ok);
     this.tracked=tracked; this.conf=(m&&m.conf)||0;
+
+    // rest between rounds: nothing is measured; the patient may sit or hold the chair
+    if(this.rest>0){ this.rest-=dt; this.inZone=false; this.glow+=(0-this.glow)*Math.min(1,dt*8);
+      this.fb={text:`😮‍💨 Rest — relax or hold the chair. Next round in ${Math.ceil(Math.max(0,this.rest))}s`,color:"#8affc0"};
+      if(this.rest<=0){ this.rest=0; this.gate.reset(); this.hold.reset(); this.steady.reset(); this.stageT=0; }
+      this._step(dt); return; }
+
     this.stanceOk = tracked && b.stanceOk;
-    this.feetDown = tracked && Math.abs(b.dyN - this.dy0) <= FOOT_LIFT;
+    // a foot counts as lifted only if it stays up for 0.4 s (filters single-frame ankle jitter)
+    const footUp = tracked && Math.abs(b.dyN - this.dy0) > FOOT_LIFT; this.footOutT = footUp ? this.footOutT+dt : 0;
+    this.feetDown = tracked && this.footOutT < 0.4;
     let s=this.sv, trunk=0;
     if(tracked){ s = b.shift - this.s0; trunk = b.trunkLean - this.t0; }
-    this.svPrev=this.sv; this.sv += (s-this.sv)*Math.min(1,dt*10); this.vel += (((this.sv-this.svPrev)/Math.max(dt,1e-3))-this.vel)*Math.min(1,dt*8);
+    // the pose signal is already filtered; a gentle extra smoothing keeps the scale calm without lag
+    this.svPrev=this.sv; this.sv += (s-this.sv)*Math.min(1,dt*5); this.vel += (((this.sv-this.svPrev)/Math.max(dt,1e-3))-this.vel)*Math.min(1,dt*6);
 
     const ok = tracked && this.stanceOk && this.feetDown;
     const [lo,hi] = this.zone();
-    const inZone = ok && s>=lo && s<=hi; this.inZone=inZone;
-    if(inZone) this.steady.push(s); else this.steady.reset();   // sway is judged only while inside the target zone, not while moving into it
+    const inZone = ok && this.gate.update(this.sv, lo, hi); this.inZone=inZone; if(!ok) this.gate.reset();
+    if(inZone) this.steady.push(this.sv); else this.steady.reset();   // sway is judged only while inside the target zone, not while moving into it
     const steadiness = inZone ? this.steady.value() : 0;
-    const r = this.hold.update(inZone, dt, now/1000);
+    const r = this.hold.update(inZone, dt, now/1000, !tracked);       // losing the camera pauses the hold instead of draining it
     if(inZone){ this.arrived=true; this.score += dt*10*(0.5+0.5*steadiness); this.qSum+=steadiness; this.qN++; }
     else if(this.arrived && tracked) this.qN++;    // drifted back out of the zone after reaching it = lost control (0 quality); the initial approach isn't penalised
     this.glow += ((inZone?1:0)-this.glow)*Math.min(1,dt*8);
+    if(tracked){ this.stageT+=dt; this.standT+=dt; }
     if(r.justRep){ this._stageDone(); if(this.done) return; }
+    else if(this.stageT>STAGE_MAX){ this.skipped++; this.pop("Let's move on 👍"); this._stageDone(true); if(this.done) return; }   // never keep the patient standing in one stage
+    if(this.standT>SESSION_MAX && !this.done){ this._finish(); return; }
 
     this.trail.push(this.sv); if(this.trail.length>40) this.trail.shift();
     this._feedback(tracked, ok, s, trunk, steadiness, b);
     this._step(dt);
   }
-  _stageDone(){
-    const st=this.stage; this.score+=25; this._sparkle(st==="right"?1:(st==="left"?-1:0)); this.audio&&this.audio.tap&&this.audio.tap();
+  _stageDone(skipped){
+    const st=this.stage; if(!skipped){ this.score+=25; this._sparkle(st==="right"?1:(st==="left"?-1:0)); this.audio&&this.audio.tap&&this.audio.tap(); }
     if(st==="right"){
-      this.reps++; this.score+=60; this.pop("⚖️ Balanced!"); this.audio&&this.audio.reward&&this.audio.reward();
+      this.reps++; if(!skipped){ this.score+=60; this.pop("⚖️ Balanced!"); this.audio&&this.audio.reward&&this.audio.reward(); }
       this.onEvent({type:"rep",reps:this.reps});
       if(this.reps>=this.repsTarget){ this._finish(); return; }
+      this.rest=this.d.rest;                                          // rest after every completed round
     }
-    this.si=(this.si+1)%STAGES.length; this.hold.configure({holdSecs:this.stageSecs()}); this.hold.reset(); this.steady.reset(); this.arrived=false;
+    this.si=(this.si+1)%STAGES.length; this.hold.configure({holdSecs:this.stageSecs()}); this.hold.reset(); this.steady.reset(); this.gate.reset(); this.arrived=false; this.stageT=0;
   }
   _feedback(tracked, ok, s, trunk, steadiness, b){
     const st=this.stage, d=this.d, [lo,hi]=this.zone();
@@ -100,7 +121,8 @@ class SteadyScales {
     else this.fb={text:"A little less — ease back toward the middle",color:"#ffb84d"};
   }
   _finish(){ this.done=true; const q=this.qN? this.qSum/this.qN : 0;
-    this.result={ completed:true, stars:starsFor(q), score:Math.round(this.score), reps:this.reps, quality:+(q*100).toFixed(0) };
+    // a session cut short by the time cap still counts as completed if at least one round was done; skipped stages are noted
+    this.result={ completed:this.reps>0, stars:starsFor(q), score:Math.round(this.score), reps:this.reps, quality:+(q*100).toFixed(0), skippedStages:this.skipped };
     this._sparkle(0); this._sparkle(1); this._sparkle(-1);
     this.onEvent({type:"end",...this.result}); }
   status(){ return { progress:this.hold.p, score:Math.round(this.score), reps:this.reps, repsTarget:this.repsTarget, feedback:this.fb, done:this.done, result:this.result }; }
@@ -152,7 +174,7 @@ class SteadyScales {
     g.beginPath(); g.arc(cx,py,24,-Math.PI/2,-Math.PI/2+this.hold.p*2*Math.PI); g.strokeStyle=this.inZone?"#8affc0":"#ffe08a"; g.lineWidth=6; g.lineCap="round"; g.stroke();
 
     // stage title + timer
-    const title = st==="centre" ? "STAND TALL — WEIGHT EVEN" : st==="left" ? "SHIFT TO YOUR LEFT LEG  ←" : "SHIFT TO YOUR RIGHT LEG  →";
+    const title = this.rest>0 ? `REST — NEXT ROUND IN ${Math.ceil(this.rest)}s` : st==="centre" ? "STAND TALL — WEIGHT EVEN" : st==="left" ? "SHIFT TO YOUR LEFT LEG  ←" : "SHIFT TO YOUR RIGHT LEG  →";
     const ty=Math.min(Math.max(H*0.235, 248), py-L*0.42-14);   // sits below the cue banner (which lives at the top for this game) but above the beam
     g.textAlign="center"; g.font=`900 ${Math.max(15,Math.min(22,W*0.05))}px sans-serif`; g.fillStyle=this.inZone?"#8affc0":"#eef2ff"; g.fillText(title, cx, ty);
     g.font="bold 14px sans-serif"; g.fillStyle="#9aa6d4"; g.fillText(`${(this.hold.p*this.stageSecs()).toFixed(1)}s / ${this.stageSecs()}s`, cx, ty+22);
@@ -200,7 +222,7 @@ class SteadyScales {
 export default {
   id:"bal", name:"Steady Scales", emoji:"⚖️", exercise:"Static Balance — Weight Shift & Double-Leg Stance", camera:"Front-on (face the camera), standing",
   group:"Static Balance · Closed Chain",
-  howto:"Stand <b>facing the camera</b>, feet shoulder-width apart on a <b>firm, flat floor</b> — keep a counter or sturdy chair within reach. Hold the scale <b>level</b>, then <b>shift your weight</b> onto your left leg and hold, return to the middle, then the right. Both feet stay flat.",
+  howto:"Stand <b>facing the camera</b>, feet shoulder-width apart on a <b>firm, flat floor</b> — keep a counter or sturdy chair within reach. Hold the scale <b>level</b>, then <b>shift your weight</b> onto your left leg and hold, return to the middle, then the right. Both feet stay flat. You get a <b>rest after every round</b>; stop at any time if you feel tired.",
   view:"front", calib:"balance", diffs:Object.keys(DIFFS), hudFeedbackTop:true,
   // mouse-preview: pointer left/right → weight on the left/right leg (as in a mirror)
   mouseMetrics(p, px){ const x=px==null?0.5:px, sv=Math.max(-1,Math.min(1,(0.5-x)*2.4));
