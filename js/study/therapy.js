@@ -1,14 +1,15 @@
 // therapy.js — "Virtual Therapy" entry point (web and Android app). One question: patient or researcher?
 // The choice is remembered on the device, so the next launch goes straight to that side; every page links
 // back here with ?choose=1 ("Change role").
-//   Patient    -> participant.html (Study ID + access code -> consent -> assigned games)
-//   Researcher -> researcher.html  (email + password in cloud mode -> dashboard)
+//   Patient    -> participant.html (Study ID + access code -> consent -> dashboard)
+//   Researcher -> researcher.html  (email + password in cloud mode -> console)
 import { getStore } from "./store.js";
-import { T, setLang, getLang, initLang } from "../okc/i18n.js";
+import { T, setLang, initLang } from "../okc/i18n.js";
+import { icon } from "./icons.js";
+import { esc, langSeg, brandPane } from "./ptui.js";
 
 const ROLE_KEY = "vt_role", PKEY = "movelab_participant_v1";
 const $ = s => document.querySelector(s);
-const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const get = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
 const set = (k, v) => { try{ localStorage.setItem(k, v); }catch(e){} };
 const patientSignedIn = () => { try{ const s = JSON.parse(get(PKEY)); return !!(s && s.studyId); }catch(e){ return false; } };
@@ -19,28 +20,25 @@ if(!q.get("choose") && (remembered === "patient" || remembered === "researcher")
   location.replace(remembered === "patient" ? "participant.html" : "researcher.html");
 }else{
   initLang(q.get("lang"));
-  document.querySelectorAll(".langbar button").forEach(b => b.onclick = () => { setLang(b.dataset.l); render(); });
   render();
 }
 
 function render(){
-  document.querySelectorAll(".langbar button").forEach(b => b.classList.toggle("on", b.dataset.l === getLang()));
   document.title = T("Virtual Therapy");
-  $("#view").innerHTML = `<div class="center" style="padding:10px 0 6px">
-      <div class="vt-logo">🦵</div><h1 class="vt-title">${esc(T("Virtual Therapy"))}</h1>
-      <p class="muted" style="font-size:16px">${esc(T("Knee exercise games, guided by your phone's camera."))}</p></div>
-    <div class="pcard" style="padding:20px">
-      <h2 class="center" style="margin:0 0 4px">${esc(T("Who is using the app?"))}</h2>
-      <button class="rolebtn coral" id="rPatient"><span class="ri">🧑‍🦳</span><span><b>${esc(T("Patient"))}</b><small>${esc(T("Sign in with your Study ID and play your exercise games."))}</small></span><span class="go">›</span></button>
-      <button class="rolebtn navy" id="rResearcher"><span class="ri">🩺</span><span><b>${esc(T("Researcher"))}</b><small>${esc(T("Register patients, record assessments and follow their progress."))}</small></span><span class="go">›</span></button>
-    </div>
-    <div class="chips" style="justify-content:center;margin-top:6px"><span class="pill">${esc(T("📷 Camera-guided"))}</span><span class="pill coral">${esc(T("🎮 7 rehab games"))}</span><span class="pill navy">${esc(T("🔒 Private by design"))}</span></div>`;
+  $("#view").innerHTML = `<div class="auth-wrap">${brandPane()}
+    <section class="formpane"><div class="topline">${langSeg()}</div><div class="inner">
+      <h2>${esc(T("Welcome"))}</h2><p class="lead">${esc(T("Choose how you are using Virtual Therapy today."))}</p>
+      <button class="choice" id="rPatient"><span class="ci">${icon("user", 24)}</span><span><b>${esc(T("I am a patient"))}</b><span>${esc(T("Sign in with your Study ID and play your exercise games."))}</span></span>${icon("chevron", 20, "chev")}</button>
+      <button class="choice r" id="rResearcher"><span class="ci">${icon("steth", 24)}</span><span><b>${esc(T("I am a researcher"))}</b><span>${esc(T("Register patients, record assessments and follow their progress."))}</span></span>${icon("chevron", 20, "chev")}</button>
+      <p class="note-sm">${icon("lock", 14)} ${esc(T("Your data is protected and only visible to your research team."))}</p>
+    </div></section></div>`;
+  document.querySelectorAll(".seg button").forEach(b => b.onclick = () => { setLang(b.dataset.l); render(); });
   $("#rPatient").onclick = () => choose("patient");
   $("#rResearcher").onclick = () => choose("researcher");
 }
 
 async function choose(role){
-  document.querySelectorAll(".rolebtn").forEach(b => b.disabled = true);
+  document.querySelectorAll(".choice").forEach(b => b.disabled = true);
   try{
     const store = await getStore();
     // In cloud mode one phone holds one Firebase sign-in at a time, so switching role signs the other side out.

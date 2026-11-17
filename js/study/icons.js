@@ -1,0 +1,42 @@
+// icons.js — one consistent line-icon set (24px grid, 1.8 stroke) for the Virtual Therapy patient and entry screens.
+const P = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/>',
+  progress: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/>',
+  health: '<path d="M19.5 12.6 12 20l-7.5-7.4A4.6 4.6 0 0 1 12 6.4a4.6 4.6 0 0 1 7.5 6.2z"/><path d="M3.5 12h4l1.5-2.5 2.5 5 1.5-2.5h7.5"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/>',
+  play: '<path d="M7 4.5v15l12.5-7.5z"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  swap: '<path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/>',
+  flame: '<path d="M12 22c3.9 0 7-2.9 7-7 0-4.5-4-6.5-4.5-11-2.7 1.8-5 5-5 8.2-1-.6-1.8-1.8-2-3.2C6 10.6 5 12.6 5 15c0 4.1 3.1 7 7 7z"/>',
+  check: '<circle cx="12" cy="12" r="9"/><path d="m8 12.2 2.8 2.8L16.5 9"/>',
+  star: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2.5h6v3.5H9z"/><path d="M9 12h6M9 16h4"/>',
+  alert: '<path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4.5M12 17h.01"/>',
+  shield: '<path d="M12 3 4.5 6v6c0 4.6 3.2 7.8 7.5 9 4.3-1.2 7.5-4.4 7.5-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
+  activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  pill: '<rect x="3" y="8.5" width="18" height="7" rx="3.5" transform="rotate(-45 12 12)"/><path d="m9.5 9.5 5 5"/>',
+  note: '<path d="M4 4h12l4 4v12H4z"/><path d="M16 4v4h4M8 12h8M8 16h6"/>',
+  steth: '<path d="M6 3v6a5 5 0 0 0 10 0V3"/><path d="M11 14v2.5a4.5 4.5 0 0 0 9 0V15"/><circle cx="20" cy="13" r="2"/>',
+  chair: '<path d="M7 3v10h10V3"/><path d="M5 13h14v3H5zM7 16v5M17 16v5"/>',
+  doctor: '<circle cx="12" cy="7" r="4"/><path d="M5 21v-1a7 7 0 0 1 14 0v1"/><path d="M12 14v4M10 16h4"/>',
+  inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/>',
+  // games
+  quad: '<path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/>',
+  slr: '<path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/><path d="M5 21h14"/>',
+  heel: '<path d="M4 18a8 8 0 0 1 16 0"/><path d="M8.5 18a3.5 3.5 0 0 1 7 0"/><circle cx="17.7" cy="12.3" r="1.3"/>',
+  tke: '<path d="M12 3v7"/><path d="M12 10 8 21"/><circle cx="12" cy="10" r="2.2"/><path d="M16 13l3-3M19 13v-3h-3"/>',
+  tempo: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.8 1.8M10 2h4M19 5l1.5 1.5"/>',
+  ham: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.2"/><path d="M12 4v5.8M20 12h-5.8M12 20v-5.8M4 12h5.8"/>',
+  bal: '<path d="M12 3v18M7.5 21h9M4.5 7h15"/><path d="m4.5 7-2.5 6a2.5 2.5 0 0 0 5 0zM19.5 7 17 13a2.5 2.5 0 0 0 5 0z"/>',
+  mark: '<path d="M9.5 3v6.5a3.5 3.5 0 0 0 3.5 3.5"/><circle cx="13.5" cy="13.5" r="2.4"/><path d="m15 15.7 2.8 5.3"/>',
+};
+export function icon(name, size = 20, cls = ""){
+  return `<svg class="ico ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || P.activity}</svg>`;
+}
