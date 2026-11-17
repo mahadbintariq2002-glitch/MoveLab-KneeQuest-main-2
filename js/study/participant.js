@@ -154,6 +154,8 @@ function pageHome(cur, d){
   $("#view").innerHTML = `
     <div class="pg-head"><div><div class="eyebrow">${esc(new Date().toLocaleDateString(loc(), { weekday:"long", day:"numeric", month:"long" }))}</div>
       <h1>${esc(hello)}${d.name ? ", " + esc(d.name.split(" ")[0]) : ""}</h1><p>${esc(T("Here is your plan for today."))}</p></div></div>
+    ${d.p.status === "completed" ? `<div class="callout" style="margin-bottom:18px;background:#EEF6FF;border-color:#CFE0F5">${icon("check", 20)}<div><b>${esc(T("You have completed your treatment programme"))}${d.p.statusDate ? " · " + esc(d.p.statusDate) : ""}</b>${esc(T("Well done. You can keep doing your exercises and view your records here."))}</div></div>`
+      : d.p.status === "withdrawn" ? `<div class="callout warn" style="margin-bottom:18px">${icon("alert", 20)}<div><b>${esc(T("Your participation in the study has ended"))}${d.p.statusDate ? " · " + esc(d.p.statusDate) : ""}</b>${esc(T("Your records stay available here. Contact your therapist if you have any questions."))}</div></div>` : ""}
     ${next ? `<section class="next"><div><span class="gico">${icon(next.id, 28)}</span><div class="eyebrow">${esc(T("Next exercise"))}</div><h2>${esc(T(next.name))}</h2>
       <p>${esc(T(next.exercise))} · ${esc(T("about 5 minutes · keep your camera on"))}</p>
       <div class="row" style="gap:10px"><a class="btn-primary" href="okc.html?game=${next.id}">${icon("play", 18)} ${esc(T("Start session"))}</a><a class="btn-quiet" href="okc.html">${esc(T("All exercises"))}</a></div></div>

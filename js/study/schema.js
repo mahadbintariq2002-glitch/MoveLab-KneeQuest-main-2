@@ -172,12 +172,16 @@ const esc = v => { if(v==null) return ""; const s = String(v); return /[",\r\n]/
 export function toCsv(rows, cols){ return "﻿" + [cols.map(c=>esc(c.label)).join(","), ...rows.map(r => cols.map(c => esc(c.get(r))).join(","))].join("\r\n"); }
 const ymd = t => t ? new Date(t).toISOString().slice(0,10) : "";
 
+// Treatment status of a participant: active (default) · completed (finished the programme) · withdrawn (left the study).
+export const STATUSES = { active:{ label:"Active", cls:"good" }, completed:{ label:"Completed treatment", cls:"navy" }, withdrawn:{ label:"Withdrawn", cls:"warn" } };
+export const statusOf = p => (p && STATUSES[p.status]) ? p.status : "active";
 export function demographicsCsv(participants){
   return toCsv(participants, [
     {label:"study_id",get:p=>p.studyId}, {label:"group",get:p=>p.group}, {label:"age",get:p=>p.demographics.age}, {label:"gender",get:p=>p.demographics.gender},
     {label:"residence",get:p=>p.demographics.residence}, {label:"education",get:p=>p.demographics.education}, {label:"occupation",get:p=>p.demographics.occupation},
     {label:"marital_status",get:p=>p.demographics.marital}, {label:"pain_duration_months",get:p=>p.demographics.painDurationMonths},
     {label:"kl_grade",get:p=>p.demographics.klGrade}, {label:"enrolled_date",get:p=>ymd(p.enrolledAt)}, {label:"consent_date",get:p=>ymd(p.consentAt)},
+    {label:"status",get:p=>statusOf(p)}, {label:"status_date",get:p=>p.statusDate||""}, {label:"status_note",get:p=>p.statusNote||""},
   ]);
 }
 export function assessmentsCsv(participants, assessments, timepoints){

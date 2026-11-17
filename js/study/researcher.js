@@ -97,7 +97,8 @@ function viewLogin(){
 function buildRows(ps, ss){
   const by = {}; for(const s of camera(ss)) (by[s.studyId] ||= []).push(s);
   return ps.map(p => { const sess = by[p.studyId] || [], n7 = S.sessionsInLastDays(sess, 7), fl = S.flags(sess);
-    return { p, sess, n7, la: S.lastActive(sess), fl, alert: fl.some(f => f.k !== "none"), total: sess.filter(S.isDone).length, adh: Math.min(100, Math.round(n7 / (settings.prescribedPerWeek || 3) * 100)) }; });
+    const st = S.statusOf(p);
+    return { p, st, sess, n7, la: S.lastActive(sess), fl, alert: st === "active" && fl.some(f => f.k !== "none"), total: sess.filter(S.isDone).length, adh: Math.min(100, Math.round(n7 / (settings.prescribedPerWeek || 3) * 100)) }; });
 }
 
 // ── overview ─────────────────────────────────────────────────────────────────────────────────
@@ -106,7 +107,8 @@ async function viewOverview(){
   const [ps, ss, dxs, qs] = await Promise.all([store.listParticipants(), store.listSessions(), listDx(), listQ()]);
   const rows = buildRows(ps, ss), cam = camera(ss), done = cam.filter(S.isDone), openQ = qs.filter(q => !q.reply).sort((a, b) => b.createdAt - a.createdAt);
   const active = rows.filter(r => r.n7 > 0).length, week = rows.reduce((a, r) => a + r.n7, 0), alerts = rows.filter(r => r.alert);
-  const avgAdh = rows.length ? Math.round(rows.reduce((a, r) => a + r.adh, 0) / rows.length) : 0;
+  const act = rows.filter(r => r.st === "active"), finished = rows.filter(r => r.st === "completed").length;
+  const avgAdh = act.length ? Math.round(act.reduce((a, r) => a + r.adh, 0) / act.length) : 0;
   const month = ps.filter(p => Date.now() - (p.enrolledAt || 0) < 30*86400000).length;
   const h = new Date().getHours(), greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
   const recent = [...cam].sort((a, b) => S.sessionTime(b) - S.sessionTime(a)).slice(0, 8);
@@ -124,8 +126,8 @@ async function viewOverview(){
       <div class="row"><a class="btn coral" href="#/add">＋ Add participant</a><a class="btn ghost" href="#/list">View all</a></div></div></div>
     ${store.mode !== "cloud" ? `<div class="ok">Local demo mode — data stays in this browser (not remote tracking). <a href="#/settings">Settings</a></div>` : ""}
     <div class="tiles">
-      <div class="tile"><span class="ic">👥</span><b>${ps.length}</b><span>Participants</span><div class="trend">${month ? "+" + month + " this month" : "&nbsp;"}</div></div>
-      <div class="tile t-navy"><span class="ic">⚡</span><b>${active}<small class="muted" style="font-size:15px">/${ps.length}</small></b><span>Active in last 7 days</span></div>
+      <div class="tile"><span class="ic">👥</span><b>${ps.length}</b><span>Participants</span><div class="trend">${[month ? "+" + month + " this month" : "", finished ? finished + " completed" : ""].filter(Boolean).join(" · ") || "&nbsp;"}</div></div>
+      <div class="tile t-navy"><span class="ic">⚡</span><b>${active}<small class="muted" style="font-size:15px">/${act.length}</small></b><span>Active in last 7 days</span></div>
       <div class="tile t-coral"><span class="ic">🎮</span><b>${week}</b><span>Sessions this week</span><div class="trend" style="color:var(--muted)">${done.length} completed in total</div></div>
       <div class="tile t-violet"><span class="ic">🎯</span><b>${avgAdh}%</b><span>Average adherence</span><div class="bar ${adhClass(avgAdh)}" style="margin-top:8px"><i style="width:${avgAdh}%"></i></div></div>
       <div class="tile t-amber"><span class="ic">⚠️</span><b style="color:${alerts.length ? "var(--bad)" : "inherit"}">${alerts.length}</b><span>Need attention</span></div>
@@ -175,19 +177,21 @@ async function viewList(){
   app.innerHTML = pageHead("Participants", `${ps.length} enrolled · camera sessions only · prescribed ${settings.prescribedPerWeek}/week`, `<a class="btn" href="#/add">＋ Add participant</a>`) + `
     <div class="card"><div class="row" style="margin-bottom:14px"><input id="q" placeholder="🔍  Search study ID…" style="max-width:240px">
       <select id="gf" style="max-width:200px"><option value="">All groups</option>${groups.map(g => `<option>${esc(g)}</option>`).join("")}</select>
+      <select id="sf" style="max-width:220px"><option value="">All statuses</option>${Object.entries(S.STATUSES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("")}</select>
       <label style="margin:0;display:flex;gap:8px;align-items:center"><input type="checkbox" id="af"> Needs attention only</label></div>
-      <div class="tablewrap"><table class="cards"><thead><tr><th>Participant</th><th>Diagnosis</th><th>Group</th><th>Age · Sex</th><th>KL</th><th>Last active</th><th>7-day</th><th>Adherence</th><th>Alerts</th></tr></thead><tbody id="tb"></tbody></table></div>
+      <div class="tablewrap"><table class="cards"><thead><tr><th>Participant</th><th>Status</th><th>Diagnosis</th><th>Group</th><th>Age · Sex</th><th>KL</th><th>Last active</th><th>7-day</th><th>Adherence</th><th>Alerts</th></tr></thead><tbody id="tb"></tbody></table></div>
       <div id="none" class="empty" hidden>No participants yet. <a href="#/add">Add the first participant</a>${store.mode === "local" ? ` or <a href="#/settings">load demo data</a>` : ""}.</div></div>`;
-  const draw = () => { const q = $("#q").value.trim().toUpperCase(), g = $("#gf").value, a = $("#af").checked;
-    const list = rows.filter(r => (!q || r.p.studyId.includes(q)) && (!g || r.p.group === g) && (!a || r.alert));
+  const draw = () => { const q = $("#q").value.trim().toUpperCase(), g = $("#gf").value, a = $("#af").checked, sf = $("#sf").value;
+    const list = rows.filter(r => (!q || r.p.studyId.includes(q)) && (!g || r.p.group === g) && (!a || r.alert) && (!sf || r.st === sf));
     $("#tb").innerHTML = list.map(r => `<tr class="click" data-id="${r.p.studyId}"><td data-label="Participant"><div class="idcell">${avatar(r.p.studyId)}<div><b>${r.p.studyId}</b><div class="tiny muted">enrolled ${fmtDate(r.p.enrolledAt)}</div></div></div></td>
+      <td data-label="Status"><span class="pill ${S.STATUSES[r.st].cls}">${S.STATUSES[r.st].label}</span></td>
       <td data-label="Diagnosis">${latest[r.p.studyId] ? `<span class="pill navy">${esc(S.dxShort(latest[r.p.studyId]))}</span>` : `<span class="muted small">—</span>`}</td>
       <td data-label="Group">${r.p.group ? `<span class="pill">${esc(r.p.group)}</span>` : "—"}</td>
       <td data-label="Age · Sex">${esc(r.p.demographics.age)} · ${esc((r.p.demographics.gender || "")[0] || "")}</td><td data-label="KL">${esc(r.p.demographics.klGrade)}</td>
       <td data-label="Last active">${ago(r.la)}</td><td data-label="7-day" class="num">${r.n7}</td><td data-label="Adherence">${adhBar(r.adh)}</td>
       <td data-label="Alerts">${r.fl.filter(f => f.k !== "none").map(f => `<span class="pill ${f.k === "pain" ? "bad" : "warn"}">${esc(f.t)}</span>`).join("") || (r.fl.length ? `<span class="muted small">No sessions yet</span>` : `<span class="pill good">OK</span>`)}</td></tr>`).join("");
     $("#none").hidden = rows.length > 0; $$("#tb tr").forEach(tr => tr.onclick = () => location.hash = "#/p/" + tr.dataset.id); };
-  ["input", "change"].forEach(ev => { $("#q").addEventListener(ev, draw); $("#gf").addEventListener(ev, draw); $("#af").addEventListener(ev, draw); }); draw();
+  ["input", "change"].forEach(ev => { $("#q").addEventListener(ev, draw); $("#gf").addEventListener(ev, draw); $("#af").addEventListener(ev, draw); $("#sf").addEventListener(ev, draw); }); draw();
 }
 
 // ── add participant ──────────────────────────────────────────────────────────────────────────
@@ -255,7 +259,7 @@ async function viewParticipant(id, tab){
   const T = (k, l) => `<a href="#/p/${id}/${k}" class="${tab === k ? "on" : ""}">${l}</a>`;
   app.innerHTML = `<a href="#/list" class="crumb">← Participants</a>
     <div class="card" style="margin-top:10px"><div class="p-head">${avatar(p.studyId, "lg")}<div class="grow">
-      <h1>${esc(p.studyId)} <span class="pill">${esc(p.group || "No group")}</span><span class="pill navy">KL ${esc(d.klGrade)}</span>${ldx ? `<span class="pill coral">🩺 ${esc(S.dxShort(ldx))}</span>` : ""}${fl.map(f => `<span class="pill ${f.k === "pain" ? "bad" : "warn"}">${esc(f.t)}</span>`).join("")}</h1>
+      <h1>${esc(p.studyId)} <span class="pill ${S.STATUSES[S.statusOf(p)].cls}">${S.STATUSES[S.statusOf(p)].label}${p.statusDate ? " · " + esc(p.statusDate) : ""}</span><span class="pill">${esc(p.group || "No group")}</span><span class="pill navy">KL ${esc(d.klGrade)}</span>${ldx ? `<span class="pill coral">🩺 ${esc(S.dxShort(ldx))}</span>` : ""}${fl.map(f => `<span class="pill ${f.k === "pain" ? "bad" : "warn"}">${esc(f.t)}</span>`).join("")}</h1>
       <span class="muted">${esc(d.age)} y · ${esc(d.gender)} · ${esc(d.residence)} · pain for ${pdur(d.painDurationMonths)} · enrolled ${fmtDate(p.enrolledAt)}</span></div>
       <div class="row"><a class="btn navy" href="#/p/${id}/diagnosis">🩺 Diagnosis</a><a class="btn" href="#/assess/${id}">＋ Assessment</a></div></div>
       <div class="minis"><div class="mini"><small>Completed sessions</small><b>${cam.filter(S.isDone).length}</b></div><div class="mini"><small>This week</small><b>${n7} / ${settings.prescribedPerWeek}</b></div>
@@ -417,8 +421,22 @@ async function tabDetails(p, as){
     <div class="row"><div><div class="muted small">Study ID</div><div class="codebox" style="font-size:20px;padding:8px 12px">${esc(p.studyId)}</div></div><div><div class="muted small">Access code</div><div class="codebox" style="font-size:20px;padding:8px 12px" id="codev">${esc(p.accessCode)}</div></div></div>
     <div class="row" style="margin-top:12px"><button class="btn small ghost" id="cpc">📤 Share / copy</button><button class="btn small danger" id="newc">Issue new code</button></div>
     <p class="muted small" style="margin-top:8px">A new code signs the participant out of their devices; they enter the new code to continue.</p></div></div>
+    <div class="card" id="stcard"><h3>🏁 Treatment status</h3><p class="muted small">Mark the participant as finished when their programme ends, or withdrawn if they leave the study. Finished and withdrawn participants are kept for analysis but no longer count towards adherence or alerts. The patient sees their status in their app.</p>
+      <div class="form-grid"><div class="field"><label>Status</label><select id="stS">${Object.entries(S.STATUSES).map(([k, v]) => `<option value="${k}" ${S.statusOf(p) === k ? "selected" : ""}>${v.label}</option>`).join("")}</select></div>
+        <div class="field"><label>Date</label><input type="date" id="stD" value="${esc(p.statusDate || new Date().toISOString().slice(0, 10))}"></div>
+        <div class="field"><label>Note <span class="hint">(optional, e.g. reason for withdrawal)</span></label><input id="stN" value="${esc(p.statusNote || "")}"></div></div>
+      <button class="btn small" id="stSave">Save status</button></div>
     <div class="card" id="gcard"><h3>🎮 Assigned games</h3><p class="muted small">Only the ticked games appear in this patient's app. Changes reach their phone the next time they open the app.</p>
-    ${gamePicker(S.assignedGames(p))}<div class="row" style="margin-top:12px"><button class="btn small" id="gsave">Save games</button><span class="muted small" id="gmsg"></span></div></div>`;
+    ${gamePicker(S.assignedGames(p))}<div class="row" style="margin-top:12px"><button class="btn small" id="gsave">Save games</button><span class="muted small" id="gmsg"></span></div></div>
+    <div class="card" style="border-color:#F5C2C2"><h3 style="color:var(--bad)">🗑 Delete participant</h3>
+      <p class="muted small">Permanently deletes ${esc(p.studyId)} and <b>everything</b> recorded about them: identity (name, CNIC), demographics, assessments, diagnoses, game sessions, feedback, questions and consent. Their app is signed out. <b>This cannot be undone</b> — export the data first if you may need it. To end treatment but keep the data, use “Completed treatment” above instead.</p>
+      <div class="row"><input id="delC" placeholder="Type ${esc(p.studyId)} to confirm" style="max-width:240px" autocomplete="off"><button class="btn danger" id="delGo">Delete permanently</button><span class="small" id="delMsg" style="color:var(--bad)"></span></div></div>`;
+  $("#stSave").onclick = async () => { const st = $("#stS").value, patch = st === "active" ? { status: "active", statusDate: null, statusNote: null } : { status: st, statusDate: $("#stD").value || null, statusNote: $("#stN").value.trim() || null };
+    await store.updateParticipant(p.studyId, patch); toast(st === "completed" ? p.studyId + " marked as completed treatment" : st === "withdrawn" ? p.studyId + " marked as withdrawn" : p.studyId + " is active again"); viewParticipant(p.studyId, "details"); };
+  $("#delGo").onclick = async () => { if($("#delC").value.trim().toUpperCase() !== p.studyId){ $("#delMsg").textContent = "Type " + p.studyId + " exactly to confirm."; return; }
+    const b = $("#delGo"); b.disabled = true; b.textContent = "Deleting…";
+    try{ await store.deleteParticipant(p.studyId); toast(p.studyId + " and all their data were deleted"); location.hash = "#/list"; }
+    catch(err){ b.disabled = false; b.textContent = "Delete permanently"; $("#delMsg").textContent = err.message || String(err); } };
   $("#gsave").onclick = async () => { const games = pickedGames($("#gcard")); if(!games.length){ $("#gmsg").textContent = "Choose at least one game."; return; }
     await store.updateParticipant(p.studyId, { games }); p.games = games; $("#gmsg").textContent = ""; toast("Games updated"); };
   $("#grp").onchange = async e => { await store.updateParticipant(p.studyId, { group: e.target.value || null }); toast("Group updated"); };

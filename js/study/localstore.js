@@ -35,6 +35,10 @@ export function createLocalStore(){
       write(db); return { studyId, accessCode };
     },
     async updateParticipant(id, patch){ const db = read(); if(!db.participants[id]) throw new Error("Unknown participant."); db.participants[id] = {...db.participants[id], ...clone(patch)}; write(db); },
+    async deleteParticipant(id){ const db = read(); if(!db.participants[id]) throw new Error("Unknown participant.");
+      delete db.participants[id]; delete db.identities[id]; delete db.consents[id]; const keep = a => (a || []).filter(x => x.studyId !== id);
+      db.assessments = keep(db.assessments); db.sessions = keep(db.sessions); db.diagnoses = keep(db.diagnoses); db.feedback = keep(db.feedback); db.questions = keep(db.questions);
+      write(db); try{ const s = JSON.parse(localStorage.getItem(PKEY)); if(s && s.studyId === id) localStorage.removeItem(PKEY); }catch(e){} },
     async resetAccessCode(id){ const db = read(); if(!db.participants[id]) throw new Error("Unknown participant."); db.participants[id].accessCode = makeAccessCode(); write(db); return db.participants[id].accessCode; },
     async getIdentity(id){ return clone(read().identities[id] || null); },
     async listIdentities(){ return Object.values(clone(read().identities)); },

@@ -75,6 +75,14 @@ export async function createCloudStore(cfg, injectedSdk){
       return { studyId, accessCode: prettyCode(code) };
     },
     async updateParticipant(id, patch){ await sdk.updateDoc(D("participants", id), clone(patch)); },
+    // Permanently removes the participant and every record linked to their study ID (batched, max 450 writes per batch).
+    async deleteParticipant(id){
+      const refs = [D("participants", id), D("identities", id), D("consents", id)];
+      for(const c of ["assessments", "sessions", "diagnoses", "feedback", "questions", "participantLinks"]){
+        const snapq = await sdk.getDocs(sdk.query(C(c), sdk.where("studyId", "==", id))); snapq.docs.forEach(d => refs.push(d.ref)); }
+      for(let i = 0; i < refs.length; i += 450){ const b = sdk.writeBatch(db); refs.slice(i, i + 450).forEach(r => b.delete(r)); await b.commit(); }
+      return refs.length;
+    },
     async resetAccessCode(id){ const code = normalizeCode(makeAccessCode()); await sdk.updateDoc(D("participants", id), { accessCode: code }); return prettyCode(code); },
     async getIdentity(id){ return await snap(D("identities", id)); },
     async listIdentities(){ return await all("identities"); },
