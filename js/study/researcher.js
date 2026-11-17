@@ -33,6 +33,9 @@ const pdur = m => m >= 12 ? `${Math.floor(m/12)} y${m%12 ? " " + (m%12) + " m" :
 const camera = list => list.filter(s => s.inputMode !== "mouse");
 const listDx = id => store.listDiagnoses ? store.listDiagnoses(id).catch(() => []) : Promise.resolve([]);
 const listFb = id => store.listFeedback ? store.listFeedback(id).catch(() => []) : Promise.resolve([]);
+const listQ = id => store.listQuestions ? store.listQuestions(id).catch(() => []) : Promise.resolve([]);
+const Q_TOPICS = { pain: "Pain or discomfort", app: "Using the app" };
+const qTopic = t => !t ? "General question" : Q_TOPICS[t] || (GAME_NAMES[t] ? "About " + GAME_NAMES[t] : t);
 const FB_KINDS = { praise:{ ic:"👏", label:"Praise", cls:"good" }, tip:{ ic:"💡", label:"Tip", cls:"" }, caution:{ ic:"⚠️", label:"Caution", cls:"warn" }, note:{ ic:"📝", label:"Note", cls:"navy" } };
 const FB_QUICK = ["Great work — keep it up! 👏", "Excellent control and steady holds.", "Try to move more slowly and smoothly.", "Keep your knee straight at the top of the lift.",
   "Rest if your pain goes above 5 out of 10.", "Please try to do 3 sessions this week.", "Make sure your whole leg is visible to the camera."];
@@ -100,8 +103,8 @@ function buildRows(ps, ss){
 // ── overview ─────────────────────────────────────────────────────────────────────────────────
 async function viewOverview(){
   app.innerHTML = `<p class="muted">Loading…</p>`;
-  const [ps, ss, dxs] = await Promise.all([store.listParticipants(), store.listSessions(), listDx()]);
-  const rows = buildRows(ps, ss), cam = camera(ss), done = cam.filter(S.isDone);
+  const [ps, ss, dxs, qs] = await Promise.all([store.listParticipants(), store.listSessions(), listDx(), listQ()]);
+  const rows = buildRows(ps, ss), cam = camera(ss), done = cam.filter(S.isDone), openQ = qs.filter(q => !q.reply).sort((a, b) => b.createdAt - a.createdAt);
   const active = rows.filter(r => r.n7 > 0).length, week = rows.reduce((a, r) => a + r.n7, 0), alerts = rows.filter(r => r.alert);
   const avgAdh = rows.length ? Math.round(rows.reduce((a, r) => a + r.adh, 0) / rows.length) : 0;
   const month = ps.filter(p => Date.now() - (p.enrolledAt || 0) < 30*86400000).length;
@@ -142,6 +145,9 @@ async function viewOverview(){
           <div class="what"><b>${esc(s.studyId)} · ${esc(gname(s))}</b><span>${s.status === "completed" ? `${s.qualityPct ?? "—"}% quality · ${s.repsDone ?? "—"}/${s.repsTarget ?? "—"} reps` : esc(String(s.status).replace("_", " "))}${s.painBefore != null ? ` · pain ${s.painBefore}→${s.painAfter ?? "—"}` : ""}</span></div>
           <div style="text-align:end">${stars(s.stars)}<div class="tiny muted">${agoShort(S.sessionTime(s))}</div></div></a>`).join("") || `<div class="empty">No sessions yet. They appear here as soon as a patient finishes a game.</div>`}</div></div>
       <div class="stack">
+        <div class="card" style="margin:0"><div class="section-title"><h2>Patient questions</h2><span class="pill ${openQ.length ? "coral" : "good"}">${openQ.length ? openQ.length + " unanswered" : "All answered"}</span></div>
+          ${openQ.length ? `<div class="feed">${openQ.slice(0, 6).map(q => `<a class="feed-item" href="#/p/${esc(q.studyId)}/questions">${avatar(q.studyId)}<div class="what"><b>${esc(q.studyId)} · ${esc(qTopic(q.topic))}</b><span>${esc(q.text.length > 90 ? q.text.slice(0, 88) + "…" : q.text)}</span></div><span class="tiny muted">${agoShort(q.createdAt)}</span></a>`).join("")}</div>`
+            : `<div class="empty" style="padding:18px">No questions waiting for a reply.</div>`}</div>
         <div class="card" style="margin:0"><div class="section-title"><h2>Needs attention</h2><span class="pill ${alerts.length ? "bad" : "good"}">${alerts.length || "All clear"}</span></div>
           ${alerts.length ? `<div class="feed">${alerts.slice(0, 6).map(r => `<a class="feed-item" href="#/p/${esc(r.p.studyId)}/games">${avatar(r.p.studyId)}<div class="what"><b>${esc(r.p.studyId)}</b><span>${r.fl.filter(f => f.k !== "none").map(f => esc(f.t)).join(" · ")}</span></div><span class="tiny muted">${ago(r.la)}</span></a>`).join("")}</div>`
             : `<div class="empty" style="padding:18px">🎉 Everyone is on track.</div>`}</div>
@@ -240,7 +246,8 @@ const MEASURES = [
 const orderAssess = as => [...as].sort((a, b) => { const o = settings.timepoints, ia = o.indexOf(a.timepoint), ib = o.indexOf(b.timepoint); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.date.localeCompare(b.date); });
 
 async function viewParticipant(id, tab){
-  const [p, as, ss, dx, fb] = await Promise.all([store.getParticipant(id), store.listAssessments(id), store.listSessions(id), listDx(id), listFb(id)]);
+  const [p, as, ss, dx, fb, qs] = await Promise.all([store.getParticipant(id), store.listAssessments(id), store.listSessions(id), listDx(id), listFb(id), listQ(id)]);
+  const openQ = qs.filter(q => !q.reply).length;
   if(!p) throw new Error("Unknown participant " + id);
   const cam = camera(ss), fl = S.flags(cam).filter(f => f.k !== "none"), d = p.demographics, ldx = S.latestDx(dx);
   const n7 = S.sessionsInLastDays(cam, 7), adh = Math.min(100, Math.round(n7 / (settings.prescribedPerWeek || 3) * 100));
@@ -254,8 +261,8 @@ async function viewParticipant(id, tab){
       <div class="minis"><div class="mini"><small>Completed sessions</small><b>${cam.filter(S.isDone).length}</b></div><div class="mini"><small>This week</small><b>${n7} / ${settings.prescribedPerWeek}</b></div>
         <div class="mini"><small>Adherence</small><b>${adh}%</b></div><div class="mini"><small>Last active</small><b>${ago(S.lastActive(cam))}</b></div>
         <div class="mini"><small>Latest WOMAC</small><b>${lastW ?? "—"}</b></div><div class="mini"><small>Assigned games</small><b>${S.assignedGames(p).length} / ${S.GAMES.length}</b></div></div></div>
-    <div class="tabs">${T("outcomes", "📈 Outcome measures")}${T("games", "🎮 Game progress")}${T("diagnosis", "🩺 Diagnosis")}${T("details", "🔐 Details & access")}</div><div id="tab"></div>`;
-  if(tab === "games") tabGames(p, ss, fb); else if(tab === "details") await tabDetails(p, as); else if(tab === "diagnosis") tabDiagnosis(p, dx); else tabOutcomes(p, as);
+    <div class="tabs">${T("outcomes", "📈 Outcome measures")}${T("games", "🎮 Game progress")}${T("diagnosis", "🩺 Diagnosis")}${T("questions", "❓ Questions" + (openQ ? ` <span class="pill coral" style="margin:0 0 0 4px">${openQ}</span>` : ""))}${T("details", "🔐 Details & access")}</div><div id="tab"></div>`;
+  if(tab === "games") tabGames(p, ss, fb); else if(tab === "details") await tabDetails(p, as); else if(tab === "diagnosis") tabDiagnosis(p, dx); else if(tab === "questions") tabQuestions(p, qs); else tabOutcomes(p, as);
 }
 
 function tabOutcomes(p, asRaw){
@@ -318,6 +325,25 @@ function tabGames(p, ssAll, fbAll = []){
       lineChart($("#g3"), { labels: flexS.map(s => new Date(S.sessionTime(s)).toLocaleDateString(undefined, { day: "numeric", month: "short" })), series: [{ label: "Peak flexion", color: COLORS[2], data: flexS.map(s => s.peakFlexionDeg) }] }); }; redraw();
   };
   render();
+}
+
+// ── questions from the patient ───────────────────────────────────────────────────────────────
+function tabQuestions(p, qs){
+  const list = qs.slice().sort((a, b) => (!!a.reply - !!b.reply) || b.createdAt - a.createdAt), box = $("#tab");
+  box.innerHTML = `<div class="card"><div class="section-title"><h2>❓ Questions from ${esc(p.studyId)}</h2><span class="muted small">The patient asks from “Ask a question” in their app; your reply appears there.</span></div>
+    ${list.length ? `<div class="timeline">${list.map(q => `<div class="tl"><div class="row between" style="align-items:flex-start"><div class="grow">
+        <span class="pill ${q.reply ? "good" : "coral"}">${q.reply ? "Answered" : "Waiting for reply"}</span> <span class="pill navy">${esc(qTopic(q.topic))}</span> <span class="muted small">${fmtDT(q.createdAt)}</span>
+        <p style="margin:8px 0 0;font-weight:700;white-space:pre-wrap">${esc(q.text)}</p>
+        ${q.reply ? `<div class="ok" style="margin:10px 0 0;white-space:pre-wrap"><b>Your reply</b> <span class="muted small">${fmtDT(q.repliedAt)}${q.repliedBy ? " · " + esc(q.repliedBy) : ""}</span><br>${esc(q.reply)}</div>` : ""}
+        <div class="row" style="margin-top:10px;align-items:flex-start"><textarea data-reply-for="${esc(q.id)}" rows="2" class="grow" placeholder="${q.reply ? "Update your reply…" : "Write a reply (English or Urdu)…"}"></textarea>
+          <button class="btn small" data-send="${esc(q.id)}">${q.reply ? "Update reply" : "Send reply"}</button></div></div>
+        <button class="btn small danger" data-qdel="${esc(q.id)}">Delete</button></div></div>`).join("")}</div>`
+      : `<div class="empty">No questions from this patient yet.</div>`}</div>`;
+  $$("[data-send]").forEach(b => b.onclick = async () => { const id = b.dataset.send, t = $(`[data-reply-for="${id}"]`).value.trim(); if(!t){ toast("Write a reply first"); return; }
+    b.disabled = true; b.textContent = "Sending…";
+    try{ await store.answerQuestion(id, t); toast("Reply sent to " + p.studyId); viewParticipant(p.studyId, "questions"); }
+    catch(err){ b.disabled = false; b.textContent = "Send reply"; toast(err.message || String(err)); } });
+  $$("[data-qdel]").forEach(b => b.onclick = async () => { if(!confirm("Delete this question?")) return; await store.deleteQuestion(b.dataset.qdel); toast("Question deleted"); viewParticipant(p.studyId, "questions"); });
 }
 
 // ── diagnosis ────────────────────────────────────────────────────────────────────────────────

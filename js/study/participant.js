@@ -5,6 +5,8 @@
 //     #progress  session charts and clinical measurements against the first check-up
 //     #health    everything the research team recorded: personal details (incl. CNIC), diagnosis, plan
 //     #messages  therapist feedback, linked to the session it refers to
+//     #questions ask the therapist a question; replies appear under it
+// New feedback/replies arrive by refreshing when the app returns to the screen, every minute, and on page change.
 // Data comes from the store (cloud rules let a linked device read its own records) and is cached for offline use.
 import { getStore } from "./store.js";
 import { T, setLang, getLang, initLang } from "../okc/i18n.js";
@@ -15,7 +17,7 @@ import { esc, langSeg, brandPane } from "./ptui.js";
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const CONSENT_VERSION = "draft-1";     // bump when the approved wording changes
-const DAY = 86400000, TABS = ["home", "progress", "health", "messages"];
+const DAY = 86400000, TABS = ["home", "progress", "health", "messages", "questions"];
 let store, data = { profile: null, sessions: [] }, redraw = null;
 
 (async function boot(){
@@ -25,7 +27,11 @@ let store, data = { profile: null, sessions: [] }, redraw = null;
   try{ localStorage.setItem("vt_role", "patient"); }catch(e){}           // next launch of the app opens the patient side
   const cur = store.participant.current();
   initLang(q.get("lang") || (cur && cur.lang));
-  addEventListener("hashchange", () => render());
+  addEventListener("hashchange", () => { document.body.classList.remove("nav-open"); const c = store.participant.current(); if(c && c.consented && /messages|questions/.test(location.hash)) refresh(c, true); render(); });
+  // keep feedback and replies current: when the app/tab comes back to the screen, and every minute while visible
+  document.addEventListener("visibilitychange", () => { const c = store.participant.current(); if(!document.hidden && c && c.consented) refresh(c, true); });
+  setInterval(() => { const c = store.participant.current(); if(!document.hidden && c && c.consented) refresh(c, true); }, 60000);
+  $("#backdrop").onclick = () => document.body.classList.remove("nav-open");
   let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => redraw && redraw(), 150); });
   render();
 })();
@@ -53,7 +59,7 @@ function viewLogin(){
       <p class="note-sm">${esc(T("Lost your code? Ask your therapist — they can issue a new one."))}</p>${demoNote()}
       <div class="alt"><a href="therapy.html?choose=1">${icon("swap", 16)} ${esc(T("Change role"))}</a><span class="muted">${icon("lock", 14)} ${esc(T("Secure sign-in"))}</span></div></div></section></div>`;
   $("#f").onsubmit = async e => { e.preventDefault(); $("#err").innerHTML = ""; const btn = $("#f button"); btn.disabled = true;
-    try{ await store.participant.login($("#sid").value.trim(), normalizeCode($("#code").value)); data = { profile: null, sessions: [] }; refreshedFor = null; location.hash = "#home"; render(); }
+    try{ await store.participant.login($("#sid").value.trim(), normalizeCode($("#code").value)); data = { profile: null, sessions: [] }; lastRefresh = 0; lastSig = ""; location.hash = "#home"; render(); }
     catch(err){ btn.disabled = false; $("#err").innerHTML = `<div class="err">${esc(T(err.message))}</div>`; } };
 }
 
@@ -78,14 +84,15 @@ function viewConsent(cur){
 const cacheKey = id => "vt_profile_" + id;
 function loadCache(id){ try{ return JSON.parse(localStorage.getItem(cacheKey(id))); }catch(e){ return null; } }
 function saveCache(id, v){ try{ localStorage.setItem(cacheKey(id), JSON.stringify(v)); }catch(e){} }
-let refreshing = false, refreshedFor = null;
-function refresh(cur){
-  if(refreshing || refreshedFor === cur.studyId) return; refreshing = true;
+let refreshing = false, lastRefresh = 0, lastSig = "", lastTab = null;
+function refresh(cur, force){
+  if(refreshing || (!force && Date.now() - lastRefresh < 15000)) return; refreshing = true;
   Promise.all([store.participant.plan ? store.participant.plan().catch(() => null) : null,
     store.participant.profile ? store.participant.profile().catch(() => null) : null,
     store.participant.listMySessions ? store.participant.listMySessions().catch(() => null) : null])
   .then(([, profile, sessions]) => { const c = store.participant.current(); if(!c || c.studyId !== cur.studyId) return;
-    if(profile) data.profile = profile; if(sessions) data.sessions = sessions; saveCache(cur.studyId, data); refreshedFor = cur.studyId; if(c.consented) render(); })
+    if(profile) data.profile = profile; if(sessions) data.sessions = sessions; lastRefresh = Date.now();
+    const sig = JSON.stringify(data); if(sig !== lastSig){ lastSig = sig; saveCache(cur.studyId, data); if(c.consented) render(); } })
   .finally(() => { refreshing = false; });
 }
 
@@ -99,6 +106,7 @@ const gtile = id => `<span class="gtile t${Math.max(0, GAMES.findIndex(g => g.id
 const qchip = q => q == null ? "" : `<span class="qchip ${q >= 80 ? "good" : q >= 60 ? "mid" : "low"}">${q}%</span>`;
 const FB = { praise:{ t:"Praise" }, tip:{ t:"Tip" }, caution:{ t:"Caution" }, note:{ t:"Note" } };
 const seenKey = id => "vt_fb_seen_" + id, seenAt = id => { try{ return Number(localStorage.getItem(seenKey(id))) || 0; }catch(e){ return 0; } };
+const seenQKey = id => "vt_q_seen_" + id, seenQAt = id => { try{ return Number(localStorage.getItem(seenQKey(id))) || 0; }catch(e){ return 0; } };
 function streakOf(done){ const days = new Set(done.map(s => new Date(sessionTime(s)).setHours(0,0,0,0))); let d = new Date().setHours(0,0,0,0), n = 0; if(!days.has(d)) d -= DAY; while(days.has(d)){ n++; d -= DAY; } return n; }
 const dl = rows => `<dl class="dl2">${rows.map(([k, v]) => `<div><dt>${esc(T(k))}</dt><dd>${v == null || v === "" ? "—" : v}</dd></div>`).join("")}</dl>`;
 const panel = (ic, title, body, meta = "", flush = false) => `<section class="panel"><div class="panel-h"><h2>${icon(ic, 18)}${esc(T(title))}</h2>${meta}</div><div class="panel-b ${flush ? "flush" : ""}">${body}</div></section>`;
@@ -109,26 +117,30 @@ function derived(cur){
   const done = (data.sessions || []).filter(s => isDone(s) && s.inputMode !== "mouse").sort((a, b) => sessionTime(b) - sessionTime(a));
   const gameIds = (Array.isArray(p.games) && p.games.length ? p.games : cur.games) || GAMES.map(g => g.id);
   const fb = (prof.feedback || []).slice().sort((a, b) => b.createdAt - a.createdAt);
-  return { prof, p, done, games: gameIds.map(gameOf).filter(g => g.name), fb, unread: fb.filter(f => f.createdAt > seenAt(cur.studyId)).length, name: prof.identity && prof.identity.name };
+  const qs = (prof.questions || []).slice().sort((a, b) => b.createdAt - a.createdAt), qSeen = seenQAt(cur.studyId);
+  return { prof, p, done, games: gameIds.map(gameOf).filter(g => g.name), fb, unread: fb.filter(f => f.createdAt > seenAt(cur.studyId)).length, name: prof.identity && prof.identity.name,
+    qs, newReplies: qs.filter(q => q.repliedAt && q.repliedAt > qSeen).length };
 }
 
 // ── app shell ────────────────────────────────────────────────────────────────────────────────
 function viewApp(cur){
-  if(refreshedFor !== cur.studyId && !data.profile){ const c = loadCache(cur.studyId); if(c) data = c; }
+  if(!data.profile){ const c = loadCache(cur.studyId); if(c){ data = c; lastSig = JSON.stringify(c); } }
   refresh(cur);
   let tab = location.hash.replace("#", ""); if(!TABS.includes(tab)) tab = "home";
   const d = derived(cur), initial = esc(((d.name || cur.studyId).trim()[0] || "P").toUpperCase());
-  const items = [["home", "home", "Overview"], ["progress", "progress", "Progress"], ["health", "health", "My health"], ["messages", "message", "Messages"]];
-  const cnt = k => k === "messages" && d.unread ? `<span class="count">${d.unread}</span>` : "";
+  const items = [["home", "home", "Overview"], ["progress", "progress", "Progress"], ["health", "health", "My health"], ["messages", "message", "Messages"], ["questions", "help", "Ask a question"]];
+  const cnt = k => k === "messages" && d.unread ? `<span class="count">${d.unread}</span>` : k === "questions" && d.newReplies ? `<span class="count">${d.newReplies}</span>` : "";
   $("#side").innerHTML = `<div class="side-brand"><span class="logo">${icon("mark", 24)}</span><div><b>${esc(T("Virtual Therapy"))}</b><small>${esc(T("Patient portal"))}</small></div></div>
     <nav>${items.map(([k, ic, l]) => `<a href="#${k}" class="${tab === k ? "on" : ""}">${icon(ic, 19)}${esc(T(l))}${cnt(k)}</a>`).join("")}
       <div class="navlabel">${esc(T("Exercise"))}</div><a href="okc.html">${icon("play", 19)}${esc(T("Start exercises"))}</a></nav>
     <div class="side-foot"><div class="who"><span class="avatar">${initial}</span><div>${esc(d.name || T("Patient"))}<small>${esc(T("Study ID"))} ${esc(cur.studyId)}</small></div></div>
       ${langSeg()}<div class="row" style="gap:16px"><a href="therapy.html?choose=1">${icon("swap", 15)}${esc(T("Change role"))}</a><a href="?signout=1">${icon("logout", 15)}${esc(T("Sign out"))}</a></div></div>`;
-  $("#ptTop").innerHTML = `<span class="brandmark">${icon("mark", 20)}</span><b>${esc(T("Virtual Therapy"))}</b><div class="right">${langSeg()}<a href="#health" class="avatar" style="width:32px;height:32px;border-radius:10px;text-decoration:none">${initial}</a></div>`;
-  $("#pnav").innerHTML = items.map(([k, ic, l]) => `<a href="#${k}" class="${tab === k ? "on" : ""}">${icon(ic, 22)}${esc(T(l))}${cnt(k)}</a>`).join("");
-  redraw = null; window.scrollTo(0, 0);
-  ({ home: pageHome, progress: pageProgress, health: pageHealth, messages: pageMessages })[tab](cur, d);
+  $("#ptTop").innerHTML = `<button class="hamb" id="hamb" aria-label="Menu">${icon("menu", 20)}</button><span class="brandmark">${icon("mark", 20)}</span><b>${esc(T("Virtual Therapy"))}</b><div class="right">${langSeg()}<a href="#health" class="avatar" style="width:32px;height:32px;border-radius:10px;text-decoration:none">${initial}</a></div>`;
+  $("#pnav").innerHTML = "";
+  $("#hamb").onclick = () => document.body.classList.toggle("nav-open");
+  document.querySelectorAll("#side a").forEach(a => a.addEventListener("click", () => document.body.classList.remove("nav-open")));
+  redraw = null; if(tab !== lastTab){ window.scrollTo(0, 0); lastTab = tab; }
+  ({ home: pageHome, progress: pageProgress, health: pageHealth, messages: pageMessages, questions: pageQuestions })[tab](cur, d);
 }
 
 // ── overview ─────────────────────────────────────────────────────────────────────────────────
@@ -246,4 +258,32 @@ function pageMessages(cur, d){
         <p>${esc(f.text)}</p>${s || f.game ? `<span class="ref">${icon(g.id, 15)} ${esc(T(g.name))}${s ? ` · ${esc(dateStr(sessionTime(s)))} · ${s.qualityPct ?? "—"}% · ${s.repsDone ?? "—"}/${s.repsTarget ?? "—"} ${esc(T("reps"))}` : ""}</span>` : ""}</div></div>`; }).join("")}</div>`
       : empty("inbox", "No messages yet", "Your therapist's feedback on your games will appear here.")}</div></section>`;
   if(d.fb.length){ try{ localStorage.setItem(seenKey(cur.studyId), String(d.fb[0].createdAt)); }catch(e){} $$(".count").forEach(c => c.remove()); }
+}
+
+// ── ask a question ───────────────────────────────────────────────────────────────────────────
+function pageQuestions(cur, d){
+  const topics = [["", "General question"], ["pain", "Pain or discomfort"], ["app", "Using the app"], ...d.games.map(g => [g.id, g.name])];
+  const topicLabel = t => { const x = topics.find(([v]) => v === (t || "")); return x ? T(x[1]) : T("General question"); };
+  $("#view").innerHTML = `<div class="pg-head"><div><div class="eyebrow">${esc(T("Ask a question"))}</div><h1>${esc(T("Questions for your therapist"))}</h1>
+      <p>${esc(T("Ask anything about your exercises, your pain or the app. Your therapist will reply here."))}</p></div></div>
+    <div class="cols"><div>
+      ${panel("help", "Your questions", d.qs.length ? `<div class="qa">${d.qs.map(q => `<div class="qitem"><div class="hd" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--muted);font-weight:600">
+          <span class="tag">${esc(topicLabel(q.topic))}</span><span>${esc(dateStr(q.createdAt))} · ${esc(relDay(q.createdAt))}</span>${q.repliedAt ? `<span class="tag praise">${esc(T("Answered"))}</span>` : ""}</div>
+          <p class="q">${esc(q.text)}</p>
+          ${q.reply ? `<div class="a"><div class="hd">${icon("doctor", 14)} ${esc(T("Your therapist replied"))} · ${esc(relDay(q.repliedAt))}</div>${esc(q.reply)}</div>` : `<div class="wait">${icon("calendar", 14)} ${esc(T("Waiting for a reply"))}</div>`}</div>`).join("")}</div>`
+        : empty("help", "No questions yet", "Questions you send will appear here with your therapist's reply."))}
+    </div><div>
+      ${panel("send", "New question", `<form id="askf" class="ask"><div class="field"><label for="qtopic">${esc(T("About"))}</label><select id="qtopic">${topics.map(([v, l]) => `<option value="${esc(v)}">${esc(T(l))}</option>`).join("")}</select></div>
+        <div class="field"><label for="qtext">${esc(T("Your question"))}</label><textarea id="qtext" maxlength="2000" placeholder="${esc(T("Type your question in English or Urdu…"))}" required></textarea></div>
+        <button class="btn-primary" style="width:100%;justify-content:center">${icon("send", 18)} ${esc(T("Send question"))}</button><p class="muted small" id="qmsg" style="margin:10px 0 0"></p></form>`)}
+      <div class="callout warn">${icon("alert", 18)}<div>${esc(T("For severe pain, swelling or a fall, stop exercising and contact your doctor or therapist directly — do not wait for a reply here."))}</div></div>
+    </div></div>`;
+  $("#askf").onsubmit = async e => { e.preventDefault(); const text = $("#qtext").value.trim(), b = $("#askf button"); if(!text) return;
+    b.disabled = true; $("#qmsg").textContent = T("Sending…");
+    try{ const rec = await store.participant.ask(text, $("#qtopic").value || null);
+      data.profile = data.profile || {}; data.profile.questions = [...(data.profile.questions || []), rec]; lastSig = JSON.stringify(data); saveCache(cur.studyId, data);
+      render(); const m = $("#qmsg"); if(m) m.textContent = T("Sent. Your therapist will reply here."); refresh(cur, true); }
+    catch(err){ b.disabled = false; $("#qmsg").textContent = (err && err.message) || String(err); } };
+  const answered = d.qs.filter(q => q.repliedAt).map(q => q.repliedAt);
+  if(answered.length){ try{ localStorage.setItem(seenQKey(cur.studyId), String(Math.max(...answered))); }catch(e){} }
 }

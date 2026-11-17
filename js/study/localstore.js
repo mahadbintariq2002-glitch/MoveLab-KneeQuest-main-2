@@ -4,7 +4,7 @@
 import { DEFAULTS, formatStudyId, makeAccessCode, normalizeCode, normalizeCnic, finalizeAssessment, validateParticipant, sessionTime, assignedGames } from "./schema.js";
 
 const KEY = "movelab_study_v1", PKEY = "movelab_participant_v1";
-const blank = () => ({ participants:{}, identities:{}, assessments:[], sessions:[], consents:{}, diagnoses:[], feedback:[], settings:{...DEFAULTS}, counter:0 });
+const blank = () => ({ participants:{}, identities:{}, assessments:[], sessions:[], consents:{}, diagnoses:[], feedback:[], questions:[], settings:{...DEFAULTS}, counter:0 });
 const read = () => { try{ const d = JSON.parse(localStorage.getItem(KEY)); return d ? {...blank(), ...d, settings:{...DEFAULTS, ...(d.settings||{})}} : blank(); }catch(e){ return blank(); } };
 const write = db => localStorage.setItem(KEY, JSON.stringify(db));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "x" + Date.now().toString(36) + Math.random().toString(36).slice(2,8));
@@ -58,6 +58,12 @@ export function createLocalStore(){
     async listFeedback(studyId){ const all = read().feedback || []; return clone(studyId ? all.filter(x => x.studyId === studyId) : all); },
     async deleteFeedback(id){ const db = read(); db.feedback = (db.feedback || []).filter(x => x.id !== id); write(db); },
 
+    // questions asked by patients; the researcher answers them
+    async listQuestions(studyId){ const all = read().questions || []; return clone(studyId ? all.filter(x => x.studyId === studyId) : all); },
+    async answerQuestion(id, reply){ const db = read(), q = (db.questions || []).find(x => x.id === id); if(!q) throw new Error("Question not found.");
+      Object.assign(q, { reply, repliedAt: Date.now(), repliedBy: "Researcher" }); write(db); return clone(q); },
+    async deleteQuestion(id){ const db = read(); db.questions = (db.questions || []).filter(x => x.id !== id); write(db); },
+
     participant: {
       async login(studyId, code){
         const db = read(), id = String(studyId||"").trim().toUpperCase(), p = db.participants[id];
@@ -72,7 +78,9 @@ export function createLocalStore(){
       // everything the researcher recorded about this participant, for the patient's own dashboard
       async profile(){ const s = this.current(); if(!s) return null; const db = read(), id = s.studyId, mine = a => clone((a || []).filter(x => x.studyId === id));
         return { participant: clone(db.participants[id] || null), identity: clone(db.identities[id] || null), consentAt: (db.consents[id] || {}).at || null,
-          assessments: mine(db.assessments), diagnoses: mine(db.diagnoses), feedback: mine(db.feedback) }; },
+          assessments: mine(db.assessments), diagnoses: mine(db.diagnoses), feedback: mine(db.feedback), questions: mine(db.questions) }; },
+      async ask(text, topic){ const s = this.current(); if(!s) throw new Error("Not signed in."); const db = read();
+        const rec = { id: uid(), studyId: s.studyId, text: String(text).slice(0, 2000), topic: topic || null, createdAt: Date.now() }; (db.questions ||= []).push(rec); write(db); return rec; },
       // The games the researcher assigned to this participant; cached in the sign-in record for offline use.
       async plan(){ const s = this.current(); if(!s) return null; const p = read().participants[s.studyId];
         const games = assignedGames(p); s.games = games; localStorage.setItem(PKEY, JSON.stringify(s)); return { games }; },

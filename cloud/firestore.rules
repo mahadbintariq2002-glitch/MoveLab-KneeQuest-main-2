@@ -6,6 +6,7 @@ rules_version = '2';
 //   assessments/{id}       : WOMAC/TUG/BBS/VAS/ROM. Researchers write; the linked participant reads their own.
 //   diagnoses/{id}         : structured knee diagnosis entries (history). Researchers write; participant reads own.
 //   feedback/{id}          : therapist feedback on sessions. Researchers write; participant reads own.
+//   questions/{id}         : questions asked by the participant; researchers answer.
 //   sessions/{id}          : game sessions. Written once by the linked participant; researchers read/delete.
 //   consents/{id}          : consent record. Written by the linked participant; researchers read.
 //   participantLinks/{uid} : links an (anonymous) device to a study ID by proving the access code.
@@ -43,6 +44,14 @@ service cloud.firestore {
     match /assessments/{id} { allow read: if isResearcher() || isParticipant(resource.data.studyId); allow write: if isResearcher(); }
     match /diagnoses/{id}   { allow read: if isResearcher() || isParticipant(resource.data.studyId); allow write: if isResearcher(); }
     match /feedback/{id}    { allow read: if isResearcher() || isParticipant(resource.data.studyId); allow write: if isResearcher(); }
+    // Questions: the linked patient may ask (create only, own study ID, plain text); researchers read, answer and delete.
+    match /questions/{id} {
+      allow create: if isParticipant(request.resource.data.studyId)
+        && request.resource.data.keys().hasOnly(['id', 'studyId', 'text', 'topic', 'createdAt'])
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000;
+      allow read: if isResearcher() || isParticipant(resource.data.studyId);
+      allow update, delete: if isResearcher();
+    }
 
     match /consents/{pid} {
       allow read: if isResearcher() || isParticipant(pid);

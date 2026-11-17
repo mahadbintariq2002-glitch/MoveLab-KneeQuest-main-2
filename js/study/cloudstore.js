@@ -105,6 +105,11 @@ export async function createCloudStore(cfg, injectedSdk){
     async listFeedback(studyId){ return await all("feedback", studyId); },
     async deleteFeedback(id){ await sdk.deleteDoc(D("feedback", id)); },
 
+    // questions/{id}: asked by the linked patient (create only); the researcher answers by adding reply fields
+    async listQuestions(studyId){ return await all("questions", studyId); },
+    async answerQuestion(id, reply){ const patch = { reply, repliedAt: Date.now(), repliedBy: (auth.currentUser && auth.currentUser.email) || null }; await sdk.updateDoc(D("questions", id), patch); return patch; },
+    async deleteQuestion(id){ await sdk.deleteDoc(D("questions", id)); },
+
     participant: {
       async login(studyId, code){
         const id = String(studyId || "").trim().toUpperCase(), c = normalizeCode(code);
@@ -145,9 +150,14 @@ export async function createCloudStore(cfg, injectedSdk){
       // everything the researcher recorded about this participant (the rules let a linked device read its own records)
       async profile(){
         const s = readLocal(); if(!s) return null; const id = s.studyId, safe = (p, d) => p.catch(() => d);
-        const [participant, identity, consent, assessments, diagnoses, feedback] = await Promise.all([safe(snap(D("participants", id)), null), safe(snap(D("identities", id)), null),
-          safe(snap(D("consents", id)), null), safe(all("assessments", id), []), safe(all("diagnoses", id), []), safe(all("feedback", id), [])]);
-        return { participant: nice(participant), identity, consentAt: (consent && consent.at) || null, assessments, diagnoses, feedback };
+        const [participant, identity, consent, assessments, diagnoses, feedback, questions] = await Promise.all([safe(snap(D("participants", id)), null), safe(snap(D("identities", id)), null),
+          safe(snap(D("consents", id)), null), safe(all("assessments", id), []), safe(all("diagnoses", id), []), safe(all("feedback", id), []), safe(all("questions", id), [])]);
+        return { participant: nice(participant), identity, consentAt: (consent && consent.at) || null, assessments, diagnoses, feedback, questions };
+      },
+      async ask(text, topic){
+        const s = readLocal(); if(!s) throw new Error("Not signed in.");
+        const rec = { id: uid(), studyId: s.studyId, text: String(text).slice(0, 2000), topic: topic || null, createdAt: Date.now() };
+        await sdk.setDoc(D("questions", rec.id), rec); return rec;
       },
       async listMySessions(){ const s = readLocal(); return s ? await all("sessions", s.studyId) : []; },
     },
