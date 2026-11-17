@@ -45,6 +45,7 @@ export async function createCloudStore(cfg, injectedSdk){
       async signIn(email, password){
         let cred; try{ cred = await sdk.signInWithEmailAndPassword(auth, email, password); }catch(e){ throw friendly(e); }
         if(!(await isResearcher(cred.user))){ await sdk.signOut(auth); throw new Error("This account is not registered as a researcher."); }
+        try{ localStorage.removeItem(PKEY); }catch(e){}            // a patient session on this device is no longer valid once the researcher signs in
         rUser = { email: cred.user.email, uid: cred.user.uid }; return rUser;
       },
       async signOut(){ rUser = null; await sdk.signOut(auth); },
@@ -107,7 +108,10 @@ export async function createCloudStore(cfg, injectedSdk){
     participant: {
       async login(studyId, code){
         const id = String(studyId || "").trim().toUpperCase(), c = normalizeCode(code);
-        const cur = auth.currentUser; if(cur && !cur.isAnonymous) throw new Error("A researcher is signed in on this browser. Use another browser, or sign out first.");
+        // One device holds one sign-in. If a researcher was signed in here (e.g. the team set up the phone), sign them out
+        // and continue as the patient — the researcher simply signs in again next time they use this device.
+        let cur = auth.currentUser;
+        if(cur && !cur.isAnonymous){ rUser = null; await sdk.signOut(auth); cur = null; try{ localStorage.setItem("vt_role", "patient"); }catch(e){} }
         if(!cur) await sdk.signInAnonymously(auth);
         try{ await sdk.setDoc(D("participantLinks", auth.currentUser.uid), { studyId: id, code: c, linkedAt: Date.now() }); }     // the rules check the code
         catch(e){ if(/permission|denied/i.test(String(e && (e.code || e.message)))) throw new Error("Study ID or access code not recognised."); throw friendly(e); }
