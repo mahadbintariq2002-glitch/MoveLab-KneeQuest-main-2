@@ -45,6 +45,8 @@ const GHOST_PRESETS=[ {id:1,label:"Ghost On"}, {id:0,label:"Ghost Off"} ];   // 
 let chosenGhost=true;
 const CONF_GATE=0.4;                       // min tracking confidence to accept a frame (low-light friendly)
 let chosenHold=8, chosenReps=5, chosenPace=1, extRef=null; // extRef = patient's calibrated full-extension angle
+const LIFT_PRESETS=[15,20,25,30,35,40,45];   // Lift-Off: target hip flexion (degrees) chosen by the therapist
+let chosenLift=25;
 let balRef=null;                                            // balRef = patient's calibrated neutral stance (front-view balance game)
 
 let W=0,H=0,DPR=1, scene="hub", mode="mouse", running=false, lastTs=0, countUntil=0;
@@ -112,6 +114,13 @@ function openDiff(){ $("diffTitle").textContent=T(curDef.name); $("diffHow").inn
   const rg=$("repRow"); rg.innerHTML=""; REP_PRESETS.forEach(n=>{ const el=document.createElement("button"); el.className="pick reps"; el.dataset.id=n;
     el.style.width="92px"; el.innerHTML=`<div class="pn">${n}</div>`; el.onclick=()=>{ chosenReps=n; sel("reps",n); Audio.tap&&Audio.tap(); }; rg.appendChild(el); });
   sel("reps",chosenReps);
+  // Lift-Off: the therapist picks how high (hip flexion °) the straight leg should be raised
+  const usesLift=!!curDef.usesLiftTarget;
+  ["liftLabel","liftNote"].forEach(id=>$(id).style.display=usesLift?"block":"none");
+  const lr=$("liftRow"); lr.innerHTML=""; lr.style.display=usesLift?"flex":"none";
+  if(usesLift) LIFT_PRESETS.forEach(deg=>{ const el=document.createElement("button"); el.className="pick lift"; el.dataset.id=deg;
+    el.style.width="92px"; el.innerHTML=`<div class="pn">${deg}°</div>`; el.onclick=()=>{ chosenLift=deg; sel("lift",deg); Audio.tap&&Audio.tap(); }; lr.appendChild(el); });
+  sel("lift",chosenLift);
   showScreen("diffScreen"); }
 function sel(cls,id){ document.querySelectorAll("."+cls).forEach(e=>e.classList.toggle("sel",e.dataset.id==id)); }
 
@@ -160,6 +169,7 @@ function sessionRecord(r, status, painAfter){
     repsTarget: game?game.repsTarget:chosenReps, repsDone:r.reps||0, completed:!!r.completed, stars:r.stars||0, score:r.score||0, qualityPct: r.quality==null?null:r.quality,
     durationSec: s.t0?Math.round((performance.now()-s.t0)/1000):null,
     holdSecs: d.usesHold!==false?chosenHold:null, paceMult: d.usesPace?chosenPace:null, ghost: d.usesGhostToggle?chosenGhost:null,
+    liftTargetDeg: d.usesLiftTarget?chosenLift:null, peakHipFlexionDeg: d.usesLiftTarget&&r.peakLift!=null?r1(r.peakLift):null,
     inputMode: mode, extRefDeg:r1(s.extRef), kneeAngleMinDeg:r1(s.minAng), kneeAngleMaxDeg:r1(s.maxAng),
     peakFlexionDeg: (s.minAng!=null&&s.extRef!=null)?r1(Math.max(0,s.extRef-s.minAng)):null,
     balShiftMaxLeft:r1(s.balL), balShiftMaxRight:r1(s.balR),
@@ -238,7 +248,7 @@ function startGame(){ ended=false; _lastFb=""; _count=-1; showScreen("game"); $(
   say(T(curDef.name)+". "+T(curDef.exercise||""), 1.0);
   $("pipWrap").style.display = mode==="camera" ? "block" : "none";
   const er = extRef!=null ? extRef : (pose.m.kneeAngle||178);   // fall back to current straight reading
-  game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, repsTarget:chosenReps, paceMult:chosenPace, ghost:chosenGhost, extRef:er, balRef, audio:Audio, onEvent:onGameEvent });
+  game=curDef.make({ W,H, difficulty:chosenDiff, holdSecs:chosenHold, repsTarget:chosenReps, paceMult:chosenPace, ghost:chosenGhost, liftDeg:curDef.usesLiftTarget?chosenLift:null, extRef:er, balRef, audio:Audio, onEvent:onGameEvent });
   $("gTitle").textContent=T(curDef.name);
   sess={ t0:performance.now(), wall0:Date.now(), extRef:er, minAng:null, maxAng:null, balL:null, balR:null };
   countUntil=performance.now()+3000; running=true; lastTs=performance.now(); requestAnimationFrame(loop); }

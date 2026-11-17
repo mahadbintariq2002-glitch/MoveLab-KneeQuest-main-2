@@ -210,7 +210,7 @@ export function sessionsCsv(participants, sessions){
     {label:"game",get:s=>s.game}, {label:"difficulty",get:s=>s.difficulty}, {label:"status",get:s=>s.status}, {label:"reps_target",get:s=>s.repsTarget}, {label:"reps_done",get:s=>s.repsDone},
     {label:"completed",get:s=>s.completed?1:0}, {label:"stars",get:s=>s.stars}, {label:"score",get:s=>s.score}, {label:"quality_pct",get:s=>s.qualityPct}, {label:"duration_sec",get:s=>s.durationSec},
     {label:"hold_secs",get:s=>s.holdSecs}, {label:"pace_mult",get:s=>s.paceMult}, {label:"ghost",get:s=>s.ghost==null?"":(s.ghost?1:0)}, {label:"input_mode",get:s=>s.inputMode},
-    {label:"ext_ref_deg",get:s=>s.extRefDeg}, {label:"knee_min_deg",get:s=>s.kneeAngleMinDeg}, {label:"knee_max_deg",get:s=>s.kneeAngleMaxDeg}, {label:"peak_flexion_deg",get:s=>s.peakFlexionDeg},
+    {label:"ext_ref_deg",get:s=>s.extRefDeg}, {label:"knee_min_deg",get:s=>s.kneeAngleMinDeg}, {label:"knee_max_deg",get:s=>s.kneeAngleMaxDeg}, {label:"peak_flexion_deg",get:s=>s.peakFlexionDeg}, {label:"lift_target_deg",get:s=>s.liftTargetDeg}, {label:"peak_hip_flexion_deg",get:s=>s.peakHipFlexionDeg},
     {label:"balance_shift_left",get:s=>s.balShiftMaxLeft}, {label:"balance_shift_right",get:s=>s.balShiftMaxRight},
     {label:"pain_before",get:s=>s.painBefore}, {label:"pain_after",get:s=>s.painAfter}, {label:"app_version",get:s=>s.appVersion}, {label:"language",get:s=>s.lang},
   ]);

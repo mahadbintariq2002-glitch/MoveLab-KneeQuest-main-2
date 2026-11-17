@@ -25,7 +25,9 @@ class LiftOff {
     this.d = DIFFS[ctx.difficulty]||DIFFS.gentle;
     this.extRef = ctx.extRef || 178;         // patient's calibrated full-extension angle (0° reference)
     this.holdSecs = ctx.holdSecs || 6;
-    this.maxElev = this.d.target + this.d.band + 18;
+    // the therapist's chosen lift (hip flexion °) replaces the level's default target; the level still sets band and knee tolerance
+    this.target = ctx.liftDeg || this.d.target; this.band = Math.min(this.d.band, Math.max(6, this.target * 0.4)); this.peakLift = 0;
+    this.maxElev = this.target + this.band + 18;
     this.hold=new HoldDecay({holdSecs:this.holdSecs, decay:this.d.decay, grace:0.8});
     this.bandGate=new ZoneGate(BAND_GATE); this.kneeGate=new ZoneGate(KNEE_GATE); this.baseBuf=[]; this.baseT=0;
     this.steady=new Steady(20, 6);
@@ -54,7 +56,8 @@ class LiftOff {
     }
     const elev = tracked ? Math.max(0, rawElev - this.baseline) : 0; this.elev=elev;
     const kneeStraight = tracked && m.kneeAngle!=null && this.kneeGate.update(m.kneeAngle, this.extRef - this.d.kneeTol, 999); this.kneeStraight=kneeStraight;
-    const inBand = tracked && this.bandGate.update(elev, this.d.target - this.d.band, this.d.target + this.d.band);
+    const inBand = tracked && this.bandGate.update(elev, this.target - this.band, this.target + this.band);
+    if(tracked && kneeStraight) this.peakLift = Math.max(this.peakLift, elev);
     const inZone = inBand && kneeStraight;
     if(tracked) this.steady.push(elev);
     const steadiness = inZone ? this.steady.value() : 0;
@@ -82,14 +85,14 @@ class LiftOff {
     if(!tracked) this.fb={text:"📷 Lie side-on — show your whole leg",color:"#ffb84d"};
     else if(this.phase==="lower") this.fb={text:"Lower your leg to reset",color:"#ff9ec7"};
     else if(!kneeStraight && elev>this.d.low) this.fb={text:"Keep your knee straight!",color:"#ff6f6f"};
-    else if(elev < this.d.target-this.d.band) this.fb={text:"Raise your leg higher ↑",color:"#37e1ff"};
-    else if(elev > this.d.target+this.d.band) this.fb={text:"Lower slightly into the band",color:"#ffb84d"};
+    else if(elev < this.target-this.band) this.fb={text:"Raise your leg higher ↑",color:"#37e1ff"};
+    else if(elev > this.target+this.band) this.fb={text:"Lower slightly into the band",color:"#ffb84d"};
     else this.fb = steadiness>0.6 ? {text:"Holding steady — nice! 🎈",color:"#8affc0"} : {text:"Hold it steady…",color:"#ffb84d"};
 
     this._step(dt);
   }
   _finish(){ this.done=true; const q=this.qN? this.qSum/this.qN : 0;
-    this.result={ completed:true, stars:starsFor(q), score:Math.round(this.score), reps:this.reps, quality:+(q*100).toFixed(0) };
+    this.result={ completed:true, stars:starsFor(q), score:Math.round(this.score), reps:this.reps, quality:+(q*100).toFixed(0), peakLift:Math.round(this.peakLift) };
     this.onEvent({type:"end",...this.result}); }
   status(){ return { progress:this.hold.p, score:Math.round(this.score), reps:this.reps, repsTarget:this.repsTarget, feedback:this.fb, done:this.done, result:this.result }; }
 
@@ -100,12 +103,12 @@ class LiftOff {
     for(const c of this.clouds){ this._cloud(g, c.x*W, c.y*H, 34*c.s); }
     // target altitude band
     const yOf=e=>H*(0.88 - Math.max(0,Math.min(1,e/this.maxElev))*0.66);
-    const yb1=yOf(this.d.target+this.d.band), yb2=yOf(this.d.target-this.d.band);
+    const yb1=yOf(this.target+this.band), yb2=yOf(this.target-this.band);
     const active=this.phase==="raise";
     g.fillStyle=active?"rgba(138,255,192,0.16)":"rgba(138,255,192,0.06)"; g.fillRect(0,yb1,W,yb2-yb1);
     g.strokeStyle=active?"#8affc0":"#5a6a90"; g.lineWidth=2; g.setLineDash([8,7]);
     g.beginPath(); g.moveTo(0,yb1); g.lineTo(W,yb1); g.moveTo(0,yb2); g.lineTo(W,yb2); g.stroke(); g.setLineDash([]);
-    g.fillStyle=active?"#8affc0":"#7a86ad"; g.font="bold 13px sans-serif"; g.textAlign="left"; g.fillText("TARGET ALTITUDE", 12, yb1-8);
+    g.fillStyle=active?"#8affc0":"#7a86ad"; g.font="bold 13px sans-serif"; g.textAlign="left"; g.fillText(`TARGET ${this.target}° (${this.target-this.band}–${this.target+this.band}°)`, 12, yb1-8);
     // ground
     g.fillStyle="#173a2e"; g.fillRect(0,H*0.9,W,H*0.1); g.fillStyle="#1f5140"; for(let i=0;i<W;i+=26){ g.fillRect(i,H*0.9-6,3,6); }
     // balloon
@@ -145,7 +148,7 @@ class LiftOff {
 export default {
   id:"slr", name:"Lift-Off", emoji:"🎈", exercise:"Straight Leg Raise", camera:"Sagittal (side-on)",
   howto:"Lie side-on. Keep your <b>knee straight</b> and <b>raise your whole leg</b> to float the balloon into the target band, then <b>hold</b>. A bent knee makes it wobble. Lower to reset.",
-  calib:"extension", diffs:Object.keys(DIFFS),
+  calib:"extension", diffs:Object.keys(DIFFS), usesLiftTarget:true,
   // mouse-preview: pointer height → leg elevation, knee assumed straight
   mouseMetrics(p){ const raise=(1-p)*70; return { tracked:true, mouse:true, conf:1, flex:3, kneeFlex:3, kneeAngle:177, hipAngle:180-raise, ankle:{x:0.5,y:p}, side:"L" }; },
   make(ctx){ return new LiftOff(ctx); },

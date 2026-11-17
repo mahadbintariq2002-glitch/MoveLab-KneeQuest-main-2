@@ -246,6 +246,8 @@ const exact = {
  "Relax — bend your knee back to reset": "ڈھیلا چھوڑیں — گھٹنا واپس موڑیں تاکہ دوبارہ تیار ہو",
  "Rest your leg flat — measuring your starting position…": "ٹانگ سیدھی نیچے رکھیں — آپ کی ابتدائی پوزیشن ناپی جا رہی ہے…",
  "Let's move on 👍": "آگے بڑھتے ہیں 👍",
+ "Lift target — hip flexion (degrees)": "ٹانگ اٹھانے کا ہدف — کولہے کا خم (ڈگری)",
+ "How high the straight leg should be raised. The green band is this angle ± a few degrees.": "سیدھی ٹانگ کتنی اونچی اٹھانی ہے۔ سبز پٹی اسی زاویے کے آس پاس چند ڈگری ہے۔",
  "Straighten your knee fully →": "اپنا گھٹنا پوری طرح سیدھا کریں",
  "Perfect — hold it! 💪": "بہترین — اسے روکے رکھیں! 💪",
  "Hold steady…": "ساکت رہیں…",
