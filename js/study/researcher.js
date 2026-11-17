@@ -32,6 +32,10 @@ function download(name, text){ const b = droid(); if(b && b.saveFile){ try{ b.sa
 const pdur = m => m >= 12 ? `${Math.floor(m/12)} y${m%12 ? " " + (m%12) + " m" : ""}` : `${m} m`;
 const camera = list => list.filter(s => s.inputMode !== "mouse");
 const listDx = id => store.listDiagnoses ? store.listDiagnoses(id).catch(() => []) : Promise.resolve([]);
+const listFb = id => store.listFeedback ? store.listFeedback(id).catch(() => []) : Promise.resolve([]);
+const FB_KINDS = { praise:{ ic:"👏", label:"Praise", cls:"good" }, tip:{ ic:"💡", label:"Tip", cls:"" }, caution:{ ic:"⚠️", label:"Caution", cls:"warn" }, note:{ ic:"📝", label:"Note", cls:"navy" } };
+const FB_QUICK = ["Great work — keep it up! 👏", "Excellent control and steady holds.", "Try to move more slowly and smoothly.", "Keep your knee straight at the top of the lift.",
+  "Rest if your pain goes above 5 out of 10.", "Please try to do 3 sessions this week.", "Make sure your whole leg is visible to the camera."];
 const adhClass = a => a >= 80 ? "" : a >= 40 ? "warn" : "bad";
 const adhBar = a => `<div class="adh"><div class="bar ${adhClass(a)}" style="width:90px"><i style="width:${Math.max(3, a)}%"></i></div>${a}%</div>`;
 const pageHead = (title, sub = "", actions = "") => `<div class="page-head"><div><h1>${title}</h1>${sub ? `<p class="muted">${sub}</p>` : ""}</div><div class="row">${actions}</div></div>`;
@@ -236,7 +240,7 @@ const MEASURES = [
 const orderAssess = as => [...as].sort((a, b) => { const o = settings.timepoints, ia = o.indexOf(a.timepoint), ib = o.indexOf(b.timepoint); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.date.localeCompare(b.date); });
 
 async function viewParticipant(id, tab){
-  const [p, as, ss, dx] = await Promise.all([store.getParticipant(id), store.listAssessments(id), store.listSessions(id), listDx(id)]);
+  const [p, as, ss, dx, fb] = await Promise.all([store.getParticipant(id), store.listAssessments(id), store.listSessions(id), listDx(id), listFb(id)]);
   if(!p) throw new Error("Unknown participant " + id);
   const cam = camera(ss), fl = S.flags(cam).filter(f => f.k !== "none"), d = p.demographics, ldx = S.latestDx(dx);
   const n7 = S.sessionsInLastDays(cam, 7), adh = Math.min(100, Math.round(n7 / (settings.prescribedPerWeek || 3) * 100));
@@ -251,7 +255,7 @@ async function viewParticipant(id, tab){
         <div class="mini"><small>Adherence</small><b>${adh}%</b></div><div class="mini"><small>Last active</small><b>${ago(S.lastActive(cam))}</b></div>
         <div class="mini"><small>Latest WOMAC</small><b>${lastW ?? "—"}</b></div><div class="mini"><small>Assigned games</small><b>${S.assignedGames(p).length} / ${S.GAMES.length}</b></div></div></div>
     <div class="tabs">${T("outcomes", "📈 Outcome measures")}${T("games", "🎮 Game progress")}${T("diagnosis", "🩺 Diagnosis")}${T("details", "🔐 Details & access")}</div><div id="tab"></div>`;
-  if(tab === "games") tabGames(p, ss); else if(tab === "details") await tabDetails(p, as); else if(tab === "diagnosis") tabDiagnosis(p, dx); else tabOutcomes(p, as);
+  if(tab === "games") tabGames(p, ss, fb); else if(tab === "details") await tabDetails(p, as); else if(tab === "diagnosis") tabDiagnosis(p, dx); else tabOutcomes(p, as);
 }
 
 function tabOutcomes(p, asRaw){
@@ -270,8 +274,9 @@ function tabOutcomes(p, asRaw){
     lineChart($("#c3"), { labels, series: ser(["VAS", "vas"]), min: 0, max: 100 }); lineChart($("#c4"), { labels, series: ser(["Left", "lf"], ["Right", "rf"]) }); lineChart($("#c5"), { labels, series: ser(["Left", "le"], ["Right", "re"]) }); }; redraw();
 }
 
-function tabGames(p, ssAll){
+function tabGames(p, ssAll, fbAll = []){
   const box = $("#tab"); let incl = false;
+  const fbBy = {}; for(const f of fbAll) if(f.sessionId) (fbBy[f.sessionId] ||= []).push(f);
   const render = () => {
     const ss = (incl ? ssAll : camera(ssAll)).slice().sort((a, b) => S.sessionTime(a) - S.sessionTime(b)), done = ss.filter(S.isDone);
     const q5 = done.slice(-5).map(s => s.qualityPct), pb = S.avg(done.map(s => s.painBefore)), pa = S.avg(done.map(s => s.painAfter)), la = S.lastActive(ss);
@@ -281,15 +286,31 @@ function tabGames(p, ssAll){
       <div class="tiles"><div class="tile"><span class="ic">✅</span><b>${done.length}</b><span>Completed sessions</span></div><div class="tile t-navy"><span class="ic">📅</span><b>${S.sessionsInLastDays(ss, 7)}<small class="muted" style="font-size:15px">/${settings.prescribedPerWeek}</small></b><span>Last 7 days</span></div>
       <div class="tile t-violet"><span class="ic">⭐</span><b>${r1(S.avg(q5))}${q5.length ? "%" : ""}</b><span>Avg quality, last 5</span></div><div class="tile t-amber"><span class="ic">🕒</span><b style="font-size:22px">${ago(la)}</b><span>Last active</span></div>
       <div class="tile t-coral"><span class="ic">💢</span><b>${r1(pb)} → ${r1(pa)}</b><span>Avg pain before → after</span></div></div>
+      <div class="card" id="fbcard"><div class="section-title"><h2>💬 Feedback to ${esc(p.studyId)}</h2><span class="muted small">Shown in the patient's app under “Messages”</span></div>
+        <div class="form-grid"><div class="field"><label>About</label><select id="fbS"><option value="">General message (not about one session)</option>${[...ss].reverse().slice(0, 20).map(s => `<option value="${esc(s.id)}">${fmtDT(S.sessionTime(s))} · ${esc(gname(s))} · ${s.qualityPct ?? "—"}%</option>`).join("")}</select></div>
+          <div class="field"><label>Type</label><select id="fbK">${Object.entries(FB_KINDS).map(([k, v]) => `<option value="${k}">${v.ic} ${v.label}</option>`).join("")}</select></div></div>
+        <div class="chips" style="margin-bottom:8px">${FB_QUICK.map((q, i) => `<button type="button" class="pill" data-q="${i}" style="border:0;cursor:pointer">${esc(q)}</button>`).join("")}</div>
+        <div class="field"><textarea id="fbT" rows="3" placeholder="Write feedback for the patient (English or Urdu)…"></textarea></div>
+        <div class="row"><button class="btn" id="fbSend">📨 Send feedback</button><span class="muted small" id="fbMsg"></span></div>
+        ${fbAll.length ? `<div class="timeline" style="margin-top:16px">${fbAll.slice().sort((a, b) => b.createdAt - a.createdAt).map(f => { const k = FB_KINDS[f.kind] || FB_KINDS.note, s = ssAll.find(x => x.id === f.sessionId);
+          return `<div class="tl"><div class="row between" style="align-items:flex-start"><div class="grow"><span class="pill ${k.cls}">${k.ic} ${k.label}</span> <span class="muted small">${fmtDT(f.createdAt)}${s ? ` · about ${GAME_EMOJI[s.game] || ""} ${esc(gname(s))} on ${fmtDate(S.sessionTime(s))}` : " · general"}</span>
+            <p style="margin:6px 0 0;white-space:pre-wrap">${esc(f.text)}</p></div><button class="btn small danger" data-fdel="${esc(f.id)}">Delete</button></div></div>`; }).join("")}</div>` : ""}</div>
       <div class="charts"><div class="chartcard"><h3>Completed sessions per week</h3><canvas id="g0"></canvas></div><div class="chartcard"><h3>Quality % per session</h3><canvas id="g1"></canvas></div>
       <div class="chartcard"><h3>Pain before vs after (0–10)</h3><canvas id="g2"></canvas></div><div class="chartcard"><h3>Peak knee flexion (°, camera-estimated)</h3><canvas id="g3"></canvas></div></div>
       <div class="card" style="margin-top:16px"><h3>By game</h3><div class="tablewrap"><table><thead><tr><th>Game</th><th>Sessions</th><th>Avg quality</th><th>Avg stars</th><th>Last played</th></tr></thead><tbody>
       ${Object.entries(byGame).map(([g, a]) => { const dn = a.filter(S.isDone); return `<tr><td><b>${GAME_EMOJI[g] || "🎮"} ${esc(gname(a[0]))}</b></td><td class="num">${dn.length}</td><td class="num">${r1(S.avg(dn.map(s => s.qualityPct)))}</td><td class="num">${r1(S.avg(dn.map(s => s.stars)))}</td><td>${fmtDate(S.lastActive(a))}</td></tr>`; }).join("") || `<tr><td colspan="5" class="muted">No sessions yet</td></tr>`}</tbody></table></div></div>
-      <div class="card"><h3>Recent sessions</h3><div class="tablewrap"><table class="cards"><thead><tr><th>When</th><th>Game</th><th>Level</th><th>Status</th><th>Reps</th><th>Quality</th><th>Pain</th><th>Mode</th></tr></thead><tbody>
+      <div class="card"><h3>Recent sessions</h3><div class="tablewrap"><table class="cards"><thead><tr><th>When</th><th>Game</th><th>Level</th><th>Status</th><th>Reps</th><th>Quality</th><th>Pain</th><th>Mode</th><th>Feedback</th></tr></thead><tbody>
       ${[...ss].reverse().slice(0, 15).map(s => `<tr><td data-label="When">${fmtDT(S.sessionTime(s))}</td><td data-label="Game"><b>${GAME_EMOJI[s.game] || ""} ${esc(gname(s))}</b></td><td data-label="Level">${esc(s.difficulty || "—")}</td>
         <td data-label="Status"><span class="pill ${s.status === "completed" ? "good" : s.status === "abandoned" ? "warn" : s.status === "skipped_pain" ? "bad" : ""}">${esc(String(s.status).replace("_", " "))}</span></td>
-        <td data-label="Reps" class="num">${s.repsDone ?? "—"}/${s.repsTarget ?? "—"}</td><td data-label="Quality" class="num">${s.qualityPct ?? "—"} ${stars(s.stars)}</td><td data-label="Pain" class="num">${s.painBefore ?? "—"} → ${s.painAfter ?? "—"}</td><td data-label="Mode">${esc(s.inputMode || "—")}</td></tr>`).join("") || `<tr><td colspan="8" class="muted">No sessions yet</td></tr>`}</tbody></table></div></div>`;
+        <td data-label="Reps" class="num">${s.repsDone ?? "—"}/${s.repsTarget ?? "—"}</td><td data-label="Quality" class="num">${s.qualityPct ?? "—"} ${stars(s.stars)}</td><td data-label="Pain" class="num">${s.painBefore ?? "—"} → ${s.painAfter ?? "—"}</td><td data-label="Mode">${esc(s.inputMode || "—")}</td><td data-label="Feedback">${fbBy[s.id] ? `<span class="pill good">💬 ${fbBy[s.id].length}</span>` : ""}<button class="btn small ghost" data-reply="${esc(s.id)}">Reply</button></td></tr>`).join("") || `<tr><td colspan="9" class="muted">No sessions yet</td></tr>`}</tbody></table></div></div>`;
     $("#incl").onchange = e => { incl = e.target.checked; render(); };
+    $$("[data-q]").forEach(b => b.onclick = () => { const t = $("#fbT"); t.value = (t.value ? t.value.trim() + " " : "") + FB_QUICK[b.dataset.q]; t.focus(); });
+    $$("[data-reply]").forEach(b => b.onclick = () => { $("#fbS").value = b.dataset.reply; $("#fbcard").scrollIntoView({ behavior: "smooth", block: "start" }); setTimeout(() => $("#fbT").focus(), 300); });
+    $("#fbSend").onclick = async () => { const text = $("#fbT").value.trim(); if(!text){ $("#fbMsg").textContent = "Write a message first."; return; }
+      const sid = $("#fbS").value || null, s = sid && ssAll.find(x => x.id === sid), b = $("#fbSend"); b.disabled = true; b.textContent = "Sending…";
+      try{ await store.saveFeedback(p.studyId, { sessionId: sid, game: s ? s.game : null, kind: $("#fbK").value, text }); toast("Feedback sent to " + p.studyId); viewParticipant(p.studyId, "games"); }
+      catch(err){ b.disabled = false; b.textContent = "📨 Send feedback"; $("#fbMsg").textContent = err.message || String(err); } };
+    $$("[data-fdel]").forEach(b => b.onclick = async () => { if(!confirm("Delete this feedback? The patient will no longer see it.")) return; await store.deleteFeedback(b.dataset.fdel); toast("Feedback deleted"); viewParticipant(p.studyId, "games"); });
     const lab = done.map(s => new Date(S.sessionTime(s)).toLocaleDateString(undefined, { day: "numeric", month: "short" })), flexS = done.filter(s => s.peakFlexionDeg != null);
     redraw = () => { barChart($("#g0"), { labels: weekly.map(w => w.label), values: weekly.map(w => w.n), ref: settings.prescribedPerWeek });
       lineChart($("#g1"), { labels: lab, series: [{ label: "Quality", data: done.map(s => s.qualityPct) }], min: 0, max: 100 });
@@ -313,7 +334,7 @@ function tabDiagnosis(p, list){
       <div class="grid-2" style="gap:14px"><div><h3>Comorbidities</h3><div class="chips">${[...(d.comorbidities || []), ...(d.comorbidityOther ? [d.comorbidityOther] : [])].map(c => `<span class="pill navy">${esc(c)}</span>`).join("") || `<span class="muted small">None recorded</span>`}</div></div>
         <div><h3>⚠️ Precautions for exercise</h3><div class="chips">${(d.precautions || []).map(c => `<span class="pill bad">${esc(c)}</span>`).join("") || `<span class="pill good">None recorded</span>`}</div></div></div>
       ${d.medications ? `<h3 style="margin-top:14px">💊 Medications</h3><p>${esc(d.medications)}</p>` : ""}${d.notes ? `<h3 style="margin-top:10px">📝 Clinical notes</h3><p style="white-space:pre-wrap">${esc(d.notes)}</p>` : ""}
-      <p class="muted tiny" style="margin:12px 0 0">Recorded ${fmtDT(d.createdAt)}${d.by ? " by " + esc(d.by) : ""} · visible to researchers only</p></div>`; };
+      <p class="muted tiny" style="margin:12px 0 0">Recorded ${fmtDT(d.createdAt)}${d.by ? " by " + esc(d.by) : ""} · also shown in the patient's app</p></div>`; };
   box.innerHTML = `${cur ? summary(cur) : `<div class="card empty">🩺 No diagnosis recorded for ${esc(p.studyId)} yet.</div>`}
     <details ${cur ? "" : "open"} id="dxd"><summary>${cur ? "✏️ Update diagnosis (saved as a new entry; history is kept)" : "➕ Record diagnosis"}</summary><div class="body" id="dxform"></div></details>
     ${hist.length ? `<div class="card"><h3>🕘 History</h3><div class="timeline">${hist.map(d => `<div class="tl"><div class="row between"><div><b>${esc(S.dxShort(d))}</b> ${d.icd10 ? `<span class="pill navy">${esc(d.icd10)}</span>` : ""}
@@ -341,7 +362,7 @@ function dxForm(el, p, prev){
     <h3>⚠️ Precautions / red flags for exercise</h3>${checks("pc", S.PRECAUTIONS, v.precautions, true)}
     <div class="form-grid" style="margin-top:14px"><div class="field"><label>Current medications</label><textarea id="dxMed" rows="2">${esc(v.medications || "")}</textarea></div>
       <div class="field"><label>Clinical notes</label><textarea id="dxNotes" rows="2">${esc(v.notes || "")}</textarea></div></div>
-    <div class="row"><button class="btn navy" id="dxSave">💾 Save diagnosis</button><span class="muted small">Researcher-only. Never shown in the patient app.</span></div>`;
+    <div class="row"><button class="btn navy" id="dxSave">💾 Save diagnosis</button><span class="muted small">The patient sees this under “My health” in their app.</span></div>`;
   const icd = () => { const c = S.icd10For($("#dxType").value, $("#dxSide").value); if(c) $("#dxIcd").value = c; else if($("#dxType").value === "other") $("#dxIcd").value = $("#dxIcd").value; };
   const bmi = () => { const b = S.bmiOf($("#dxH").value, $("#dxW").value); $("#dxBmi").textContent = b ?? "—"; $("#dxBmiC").textContent = S.bmiClass(b); };
   $("#dxType").onchange = () => { $("#dxOther").style.display = $("#dxType").value === "other" ? "" : "none"; icd(); };

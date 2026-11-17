@@ -4,7 +4,7 @@
 import { DEFAULTS, formatStudyId, makeAccessCode, normalizeCode, normalizeCnic, finalizeAssessment, validateParticipant, sessionTime, assignedGames } from "./schema.js";
 
 const KEY = "movelab_study_v1", PKEY = "movelab_participant_v1";
-const blank = () => ({ participants:{}, identities:{}, assessments:[], sessions:[], consents:{}, diagnoses:[], settings:{...DEFAULTS}, counter:0 });
+const blank = () => ({ participants:{}, identities:{}, assessments:[], sessions:[], consents:{}, diagnoses:[], feedback:[], settings:{...DEFAULTS}, counter:0 });
 const read = () => { try{ const d = JSON.parse(localStorage.getItem(KEY)); return d ? {...blank(), ...d, settings:{...DEFAULTS, ...(d.settings||{})}} : blank(); }catch(e){ return blank(); } };
 const write = db => localStorage.setItem(KEY, JSON.stringify(db));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "x" + Date.now().toString(36) + Math.random().toString(36).slice(2,8));
@@ -53,6 +53,11 @@ export function createLocalStore(){
     async listDiagnoses(studyId){ const all = read().diagnoses || []; return clone(studyId ? all.filter(x => x.studyId === studyId) : all); },
     async deleteDiagnosis(id){ const db = read(); db.diagnoses = (db.diagnoses || []).filter(x => x.id !== id); write(db); },
 
+    // therapist feedback to the patient (optionally about one session); the patient reads it in their app
+    async saveFeedback(studyId, f){ const db = read(); const rec = { ...clone(f), studyId, id: uid(), createdAt: Date.now(), by: "Researcher" }; (db.feedback ||= []).push(rec); write(db); return rec; },
+    async listFeedback(studyId){ const all = read().feedback || []; return clone(studyId ? all.filter(x => x.studyId === studyId) : all); },
+    async deleteFeedback(id){ const db = read(); db.feedback = (db.feedback || []).filter(x => x.id !== id); write(db); },
+
     participant: {
       async login(studyId, code){
         const db = read(), id = String(studyId||"").trim().toUpperCase(), p = db.participants[id];
@@ -64,6 +69,10 @@ export function createLocalStore(){
       current(){ try{ return JSON.parse(localStorage.getItem(PKEY)); }catch(e){ return null; } },
       async setLang(lang){ const s = this.current(); if(s){ s.lang = lang; localStorage.setItem(PKEY, JSON.stringify(s)); } },
       async logout(){ localStorage.removeItem(PKEY); },
+      // everything the researcher recorded about this participant, for the patient's own dashboard
+      async profile(){ const s = this.current(); if(!s) return null; const db = read(), id = s.studyId, mine = a => clone((a || []).filter(x => x.studyId === id));
+        return { participant: clone(db.participants[id] || null), identity: clone(db.identities[id] || null), consentAt: (db.consents[id] || {}).at || null,
+          assessments: mine(db.assessments), diagnoses: mine(db.diagnoses), feedback: mine(db.feedback) }; },
       // The games the researcher assigned to this participant; cached in the sign-in record for offline use.
       async plan(){ const s = this.current(); if(!s) return null; const p = read().participants[s.studyId];
         const games = assignedGames(p); s.games = games; localStorage.setItem(PKEY, JSON.stringify(s)); return { games }; },
@@ -81,7 +90,7 @@ export function createLocalStore(){
       async generate(){ const db = read(); const n = generateDemo(db); write(db); return n; },
       async clear(){ const db = read(), ids = new Set(Object.values(db.participants).filter(p=>p.demo).map(p=>p.studyId));
         for(const id of ids){ delete db.participants[id]; delete db.identities[id]; delete db.consents[id]; }
-        db.assessments = db.assessments.filter(a => !ids.has(a.studyId)); db.sessions = db.sessions.filter(s => !ids.has(s.studyId)); db.diagnoses = (db.diagnoses || []).filter(x => !ids.has(x.studyId)); write(db); return ids.size; },
+        db.assessments = db.assessments.filter(a => !ids.has(a.studyId)); db.sessions = db.sessions.filter(s => !ids.has(s.studyId)); db.diagnoses = (db.diagnoses || []).filter(x => !ids.has(x.studyId)); db.feedback = (db.feedback || []).filter(x => !ids.has(x.studyId)); write(db); return ids.size; },
       async wipeAll(){ localStorage.removeItem(KEY); localStorage.removeItem(PKEY); },
     },
   };
@@ -127,6 +136,9 @@ function generateDemo(db){
           balShiftMaxLeft: game==="bal"?0.5:null, balShiftMaxRight: game==="bal"?-0.5:null, painBefore:pb, painAfter:pa, startedAt:new Date(t).toISOString(), endedAt:new Date(t+240000).toISOString() });
       }
     }
+    { const mine = db.sessions.filter(x => x.studyId === studyId && x.status === "completed").slice(-2), msgs = [["praise","Great control on this one — your knee stayed steady through every hold. Keep it up!"],["tip","Try to slow down on the way back down; count to three as you lower your leg."]];
+      mine.forEach((x, k) => (db.feedback ||= []).push({ id: uid(), studyId, demo:true, sessionId: x.id, game: x.game, kind: msgs[k][0], text: msgs[k][1], createdAt: Date.parse(x.endedAt) + 3600000, by: "Dr. Demo" }));
+      (db.feedback ||= []).push({ id: uid(), studyId, demo:true, sessionId: null, kind: "note", text: "You are doing well this week. Remember to keep a chair nearby for the balance game.", createdAt: now - 86400000, by: "Dr. Demo" }); }
     // assessments at the time points the participant has reached; severity eases with treatment
     const tps = [["Baseline",0],["Week 4",4],["Post-treatment",6]].filter(([,w]) => w <= weeks);
     tps.forEach(([tp, w]) => {

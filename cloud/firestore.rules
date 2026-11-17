@@ -2,9 +2,10 @@ rules_version = '2';
 // MoveLab study — Firestore security rules.
 //   researchers/{uid}      : a document here (created by you in the console) makes that account a researcher.
 //   participants/{id}      : demographics + access code. Researchers read/write; the linked participant reads their own.
-//   identities/{id}        : NAME + CNIC. Researchers only. Participants can never read this.
-//   assessments/{id}       : WOMAC/TUG/BBS/VAS/ROM. Researchers only.
-//   diagnoses/{id}         : structured knee diagnosis entries (history). Researchers only.
+//   identities/{id}        : NAME + CNIC. Researchers write; the linked participant can read their own.
+//   assessments/{id}       : WOMAC/TUG/BBS/VAS/ROM. Researchers write; the linked participant reads their own.
+//   diagnoses/{id}         : structured knee diagnosis entries (history). Researchers write; participant reads own.
+//   feedback/{id}          : therapist feedback on sessions. Researchers write; participant reads own.
 //   sessions/{id}          : game sessions. Written once by the linked participant; researchers read/delete.
 //   consents/{id}          : consent record. Written by the linked participant; researchers read.
 //   participantLinks/{uid} : links an (anonymous) device to a study ID by proving the access code.
@@ -37,9 +38,11 @@ service cloud.firestore {
       allow create, update, delete: if isResearcher();
     }
 
-    match /identities/{pid} { allow read, write: if isResearcher(); }
-    match /assessments/{id} { allow read, write: if isResearcher(); }
-    match /diagnoses/{id}   { allow read, write: if isResearcher(); }   // clinical diagnosis history — never visible to participants
+    // The patient's own dashboard shows everything recorded about them: identity, assessments, diagnosis, feedback.
+    match /identities/{pid} { allow read: if isResearcher() || isParticipant(pid); allow write: if isResearcher(); }
+    match /assessments/{id} { allow read: if isResearcher() || isParticipant(resource.data.studyId); allow write: if isResearcher(); }
+    match /diagnoses/{id}   { allow read: if isResearcher() || isParticipant(resource.data.studyId); allow write: if isResearcher(); }
+    match /feedback/{id}    { allow read: if isResearcher() || isParticipant(resource.data.studyId); allow write: if isResearcher(); }
 
     match /consents/{pid} {
       allow read: if isResearcher() || isParticipant(pid);

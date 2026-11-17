@@ -96,6 +96,14 @@ export async function createCloudStore(cfg, injectedSdk){
     async listDiagnoses(studyId){ return await all("diagnoses", studyId); },
     async deleteDiagnosis(id){ await sdk.deleteDoc(D("diagnoses", id)); },
 
+    // feedback/{id}: therapist feedback to the patient (optionally about one session). Researchers write; the patient reads their own.
+    async saveFeedback(studyId, f){
+      const rec = JSON.parse(JSON.stringify({ ...f, studyId, id: uid(), createdAt: Date.now(), by: (auth.currentUser && auth.currentUser.email) || null }));
+      await sdk.setDoc(D("feedback", rec.id), rec); return rec;
+    },
+    async listFeedback(studyId){ return await all("feedback", studyId); },
+    async deleteFeedback(id){ await sdk.deleteDoc(D("feedback", id)); },
+
     participant: {
       async login(studyId, code){
         const id = String(studyId || "").trim().toUpperCase(), c = normalizeCode(code);
@@ -129,6 +137,13 @@ export async function createCloudStore(cfg, injectedSdk){
         const s = readLocal(); if(!s) throw new Error("Not signed in.");
         const data = JSON.parse(JSON.stringify({ ...rec, studyId: s.studyId }));   // deterministic payload: a retry of the same record is byte-identical
         return sdk.setDoc(D("sessions", rec.id), data);            // idempotent: same id + same content = no-op (the rules allow an identical rewrite)
+      },
+      // everything the researcher recorded about this participant (the rules let a linked device read its own records)
+      async profile(){
+        const s = readLocal(); if(!s) return null; const id = s.studyId, safe = (p, d) => p.catch(() => d);
+        const [participant, identity, consent, assessments, diagnoses, feedback] = await Promise.all([safe(snap(D("participants", id)), null), safe(snap(D("identities", id)), null),
+          safe(snap(D("consents", id)), null), safe(all("assessments", id), []), safe(all("diagnoses", id), []), safe(all("feedback", id), [])]);
+        return { participant: nice(participant), identity, consentAt: (consent && consent.at) || null, assessments, diagnoses, feedback };
       },
       async listMySessions(){ const s = readLocal(); return s ? await all("sessions", s.studyId) : []; },
     },

@@ -190,6 +190,23 @@ body.participant{min-height:100vh;background:
 .tipcard{display:flex;gap:12px;align-items:flex-start;background:var(--amber-l);border:1px solid #FDE68A;border-radius:18px;padding:14px;font-size:14px;color:#78350F;margin:16px 0}
 .tipcard .ti{font-size:24px}
 .gamelist{list-style:none;padding:0;margin:8px 0 14px;display:grid;gap:6px;text-align:start} .gamelist li{background:var(--mint);border:1px solid var(--teal-l);border-radius:12px;padding:9px 12px;font-weight:700}
+/* patient dashboard: bottom tab bar, messages, measures */
+body.has-nav .pwrap{padding-bottom:110px}
+.p-nav{position:fixed;inset-inline:0;bottom:0;z-index:50;display:flex;justify-content:space-around;gap:4px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-top:1px solid #DDEFEC;box-shadow:0 -8px 30px rgba(15,42,68,.08)}
+.p-nav a{flex:1;max-width:120px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border-radius:14px;text-decoration:none;color:var(--muted);font-size:12px;font-weight:800}
+.p-nav a .ic{position:relative;font-size:21px;line-height:1.1;filter:grayscale(.6);opacity:.8} .p-nav a.on{color:var(--teal-dd);background:var(--mint)} .p-nav a.on .ic{filter:none;opacity:1}
+.p-nav .dot{position:absolute;top:-6px;inset-inline-end:-12px;min-width:18px;height:18px;border-radius:99px;background:var(--coral-d);color:#fff;font:800 11px/18px var(--font);font-style:normal;text-align:center;padding:0 4px}
+.p-head2{margin:2px 4px 14px} .p-head2 h1{color:var(--navy);font-size:24px}
+.p-msg{display:flex;gap:12px;align-items:flex-start;text-decoration:none;color:var(--ink);background:#fff;border:1px solid #DDEFEC;border-radius:20px;padding:14px;margin-bottom:16px;box-shadow:var(--shadow)}
+.p-msg.new{border-color:#FFC9B8;background:linear-gradient(180deg,#FFF6F2,#fff)} .p-msg:hover{color:var(--ink)} .p-msg .mi{font-size:24px;width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--coral-l);flex:none}
+.p-msg b{color:var(--navy)} .p-msg p{margin:2px 0;font-size:14px} .p-msg .tiny{color:var(--muted)} .p-msg .go{font-size:24px;color:var(--faint);align-self:center} [dir=rtl] .p-msg .go{transform:scaleX(-1)}
+.fbline{display:block;margin-top:4px;font-size:12.5px;color:var(--teal-dd);text-decoration:none;font-weight:600}
+.p-fb{background:#fff;border:1px solid #DDEFEC;border-radius:20px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)} .p-fb.new{border-color:#FFC9B8;box-shadow:0 10px 26px rgba(242,96,61,.12)}
+.p-fb .txt{font-size:15.5px;margin:10px 0;white-space:pre-wrap} .p-fb .about{background:#F6FBFA;margin-top:4px}
+.p-measures{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.p-measure{background:#fff;border:1px solid #DDEFEC;border-radius:18px;padding:12px;box-shadow:var(--shadow)} .p-measure small{display:block;color:var(--muted);font-weight:700;font-size:12px;min-height:30px} .p-measure b{font-size:24px;color:var(--navy)}
+.p-measure .chg{display:block;font-size:12px;font-weight:700;color:var(--muted)} .p-measure.better .chg{color:var(--good)} .p-measure.worse .chg{color:var(--bad)} .p-measure.better{border-color:#BBF7D0} .p-measure.worse{border-color:#FECACA}
+.p-chart{margin-bottom:12px;border-radius:20px;border-color:#DDEFEC}
 .p-foot{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin-top:18px;font-size:14px;font-weight:700}
 [dir=rtl] .consentbox,[dir=rtl] .pcard{text-align:right} [dir=rtl] body{font-family:"Noto Naskh Arabic","Plus Jakarta Sans","Segoe UI",Tahoma,system-ui,sans-serif;line-height:1.85}
 @media (max-width:380px){ .p-games{grid-template-columns:1fr} .p-stats{grid-template-columns:repeat(3,1fr)} .p-stat b{font-size:19px} }
