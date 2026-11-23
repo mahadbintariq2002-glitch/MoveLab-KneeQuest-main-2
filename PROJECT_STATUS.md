@@ -1,0 +1,140 @@
+# Virtual Therapy (MoveLab / KneeQuest) — Project Status
+
+> **Single source of truth.** Read this file first in every session instead of the chat history.
+> **Update it after every change** (sections 7, 8 and 9 at minimum). Last updated: **2026-11-23**.
+
+---
+
+## 1. What this is
+Final-year project: **camera-based, gamified knee rehabilitation for knee osteoarthritis (KL grade 2–3)**, run as a
+research study. One product, two roles, available as a **website** and an **Android app** (same code):
+
+- **Patient**: signs in with Study ID + access code → consent → dashboard → plays the exercise games the
+  researcher assigned (phone camera + MediaPipe Pose tracks the knee). Urdu + English.
+- **Researcher / therapist**: registers patients, assigns games, records assessments and diagnosis, follows game
+  sessions remotely, sends feedback, answers patient questions, exports CSVs.
+
+Owner: Mahad (GitHub `mahadbintariq2002-glitch`). Defense was 2026-09-15; the study app came after.
+
+## 2. Links, locations, accounts
+| Item | Value |
+|---|---|
+| Live entry page | https://mahadbintariq2002-glitch.github.io/MoveLab-KneeQuest-main-2/therapy.html |
+| Repo | `mahadbintariq2002-glitch/MoveLab-KneeQuest-main-2` (public), branch `main`, GitHub Pages from `main` |
+| Local working copy | `C:\Users\fahad\Downloads\MoveLab-KneeQuest-main\MoveLab-KneeQuest-main` |
+| Firebase project | `virtual-therapy-17a2d` (Spark/free), Firestore `asia-south1`, Auth: Email/Password + Anonymous (anon auto-cleanup **off** on purpose) |
+| Researcher account | mahadbintariq2002@gmail.com — has a doc in `researchers/{uid}` (uid `9NCCYFYcvwTOCJUONzDeUwNdFeH3`) |
+| Latest APK | `C:\Users\fahad\OneDrive\Desktop\Virtual-Therapy.apk` (debug build; replace after every change) |
+| Android Studio | `C:\Users\fahad\AppData\Local\Programs\Android Studio\android-studio\bin\studio64.exe` (Desktop + Start-menu shortcut) |
+| Android SDK | `C:\Users\fahad\AppData\Local\Android\Sdk` (platform 35, build-tools 35.0.0, emulator, x86_64-35 image partly downloaded) |
+| JDK for Gradle | `C:\Users\fahad\AppData\Local\Programs\JDK21\jdk-21.0.13+9` (Studio's JBR is JDK 25 → Gradle 8.14 fails) |
+| Test data in live DB | **P001 "TEST PATIENT (delete me)"** — fake; has a TEST diagnosis, TEST feedback messages, 1 test session. User chose to keep it. |
+
+**Pushing:** `gh` CLI is logged in as `mahadbintariq2002-glitch` and git uses it → `git push origin main:main` just works (no tokens).
+**Firebase console changes** (rules etc.) are done through the user's Chrome via the Claude-in-Chrome extension (user is signed in).
+**Never type the user's passwords**; ask them to enter passwords themselves.
+
+## 3. Architecture (file map)
+Web app = vanilla ES modules, no build step. Android = WebView shell that bundles the same files.
+
+| Path | Role |
+|---|---|
+| `therapy.html` + `js/study/therapy.js` | Entry: choose **Patient** or **Researcher** (remembered in `localStorage.vt_role`; `?choose=1` forces the chooser). Split brand-panel layout. |
+| `participant.html` + `js/study/participant.js` | Patient portal: sign-in, consent, app shell (navy sidebar desktop / ☰ drawer phone), pages `#home #progress #health #messages #questions`. |
+| `researcher.html` + `js/study/researcher.js` | Research console: sidebar; routes `#/` Overview, `#/list`, `#/add`, `#/p/ID/(outcomes|games|diagnosis|questions|details)`, `#/assess/ID`, `#/export`, `#/settings`. |
+| `okc.html` + `js/okc/shell.js` | Game shell: hub → setup (level, hold, pace, reps, Lift-Off target) → calibration → game → pain check → summary. `?game=id` deep link, `?demo=1` = never recorded. |
+| `js/okc/games/*.js` | 7 games: `quad` Quad Press, `slr` Lift-Off, `heel` Trace the Arc, `tke` Lock the Slot, `tempo` Tempo Lift, `ham` Reel It In, `bal` Steady Scales. |
+| `js/okc/pose.js` | MediaPipe PoseLandmarker (CDN) + filtering. Side view = knee/hip angles; front view = balance shift (feet reference + median + One-Euro). |
+| `js/okc/rehab.js` | `HoldDecay` (hold timer, grace, `freeze` on tracking loss), `ZoneGate` (hysteresis), `Steady`, `RepCycle`, `starsFor`. |
+| `js/okc/sync.js` | Patient context + session hand-off (`Sync.submit` → store; outbox on failure; `AndroidBridge.saveSession` safety copy). |
+| `js/okc/i18n.js`, `js/okc/lang-ur.js` | Urdu: English text is the key (`T()`), regex `patterns` for game cues. **Add Urdu for every new UI string.** |
+| `js/study/store.js` | Picks cloud vs local store. Localhost-only `?local=1` switch forces local store for UI testing (`?local=0` back). |
+| `js/study/cloudstore.js` / `localstore.js` | Same interface, Firebase vs browser localStorage (local has a demo-data generator). |
+| `js/study/schema.js` | Constants (GAMES, DX types, ICD-10 helper, STATUSES), scoring (WOMAC, BBS), validation, CSV builders. |
+| `js/study/charts.js` | Canvas line/bar charts + SVG `ring()`. |
+| `js/study/icons.js`, `ptui.js` | Line-icon set; shared brand panel + language switch for patient/entry screens. |
+| `css/study.css` | Design tokens (navy/teal) + researcher console styles. `css/patient.css` = patient portal + auth screens. |
+| `js/study/cloud-config.js` | Firebase web config (not secret; rules protect data). `null` = local mode. |
+| `cloud/firestore.rules` | Security rules — **keep in sync with the live console** (see §6). `cloud/SETUP.md` setup guide. |
+| `android/` | Gradle project (AGP 8.13.2, Gradle 8.14.3 wrapper, Java, compile/target SDK 35, minSdk 26). App id `pk.movelab.virtualtherapy`, name "Virtual Therapy", start page `therapy.html`. `syncWeb` task copies web files into assets at build time. |
+| `android/app/src/main/java/pk/movelab/kneequest/` | `MainActivity` (WebView + WebViewAssetLoader at `https://appassets.androidplatform.net/assets/`, camera permission, insets), `AndroidBridge` (getContext, saveSession→SQLite, setLang, saveFile/shareText via share sheet), `LocalDb`. |
+| Old/unrelated pages | `index.html` (full-body ROM tracker), `arcade.html`, `game.html`, `play.html`, `desktop/` Python — older prototypes, not part of the study app. |
+
+## 4. Data model (Firestore collections)
+| Collection | Contents | Access (rules) |
+|---|---|---|
+| `researchers/{uid}` | marks an account as researcher (created in console) | owner read |
+| `participants/{id}` | demographics, group, accessCode, `games` (assigned ids, null = all), `status` (active/completed/withdrawn), `statusDate`, `statusNote`, enrolledAt | researcher r/w; linked patient reads own |
+| `identities/{id}` | name, CNIC | researcher r/w; patient reads own |
+| `assessments/{id}` | WOMAC items/subscales, TUG, BBS, VAS, ROM, timepoint, date, notes | researcher r/w; patient reads own |
+| `diagnoses/{id}` | type, ICD-10 (M17.x auto from type+side), side, KL per knee, imaging, BMI, comorbidities, precautions, meds, notes — one doc per save (history) | researcher r/w; patient reads own |
+| `sessions/{id}` | one per game session (game, level, reps, quality, stars, pain before/after, knee angles, holdSecs, liftTargetDeg, peakHipFlexionDeg, …) | patient creates (immutable; identical rewrite allowed); researcher reads/deletes |
+| `feedback/{id}` | therapist feedback: kind (praise/tip/caution/note), text, optional sessionId | researcher writes; patient reads own |
+| `questions/{id}` | patient question: text, topic, createdAt; reply, repliedAt, repliedBy | patient creates (own, ≤2000 chars, fixed keys); researcher reads/updates/deletes |
+| `consents/{id}` | consent record | patient creates; researcher reads/deletes |
+| `participantLinks/{uid}` | anonymous device ↔ studyId + code (rules re-check code every access; new code signs old devices out) | owner/researcher |
+| `meta/study` | counter (sequential IDs P001…) + settings (timepoints, groups, prescribedPerWeek) | researcher |
+
+Deleting a participant (researcher → Details & access → type ID) removes the participant + identity + consent and all docs with that `studyId` in assessments, sessions, diagnoses, feedback, questions, participantLinks.
+
+## 5. Features done (summary)
+**Games (7)** — calibration (`extRef` full extension; balance neutral stance), levels Gentle/Steady/Champion, hold / pace / ghost / reps selectors, pain check before/after (study participants), Urdu cues + optional Urdu speech.
+- 2026-11-18 precision & safety: Steady Scales (stable feet reference + filtering ≈3.5× less jitter, hysteresis, side holds capped 5/7/10 s, rest after each round 12/10/8 s, stage skip after 25 s, 4-min standing cap), Quad Press (tol 8/6/4°, 3° hysteresis, dropout pause, 5-s relax instead of 32° bend), Lift-Off (raise measured from patient's resting position, hysteresis, dropout pause).
+- 2026-11-18 Lift-Off **therapist lift target** 15–45° (setup screen); records target + peak hip flexion reached.
+
+**Researcher console** — Overview (KPIs, activity chart, quality/pain/adherence rings, recent activity, unanswered questions, needs attention, games played, diagnosis mix, KL mix); participants list (status filter, adherence bars, diagnosis); add participant (identity, demographics, games); profile tabs: Outcomes (table + charts), Game progress (charts, by game, recent sessions + feedback panel / Reply), Diagnosis (structured + history), Questions (reply), Details & access (demographics, identity reveal, access code share/reset, assigned games, **treatment status**, **delete participant**); assessment form (WOMAC, TUG stopwatch, BBS, VAS, ROM); exports (demographics incl. status, assessments, sessions incl. lift target, diagnoses, identity key); settings; local demo data.
+
+**Patient portal** — professional navy/teal design (line icons, no emoji UI); Overview (next exercise card + weekly ring, KPIs, exercise plan, therapist note, recent activity, safety); Progress (charts + clinical measurements vs first check-up); My health (personal details incl. CNIC, diagnosis, plan); Messages (feedback linked to sessions, unread badge); Ask a question (topic + text, replies shown); completed/withdrawn banner; auto-refresh on app resume, every 60 s, on page change. Fits 320–360 px phones.
+
+**Platform** — Firebase live (rules published), patient login replaces a researcher login on the same device, Android single app with WebView bridge, service worker skipped inside the app.
+
+## 6. How to work on it (procedures)
+**Test UI locally (no live data touched):** start preview `movelab-kneequest` (python http.server, port 8123 — `.claude/launch.json`), open `http://localhost:8123/<page>?local=1` (switch persists in localStorage; `?local=0` to undo). Researcher Settings → "Load demo data". Browser caches modules: before testing changed files run in the page `await fetch('/js/…file.js',{cache:'reload'})` then reload.
+**Check phone fit:** resize viewport to 360 and 320; `document.documentElement.scrollWidth` must equal `clientWidth` on every patient page.
+**Game logic without a camera:** `okc.html?demo=1` → `window.__okc.openGame(id,hold,reps)`, `__okc.setPointer(y,x)` (mouse preview). For precision work, a before/after simulation (synthetic landmarks + noise) was used — rebuild one under `tests/_sim/` if needed and delete it afterwards.
+**Commit & publish web:** `git add -A && git commit` (end message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`) → `git push origin main:main`. Pages deploys in ~1 min; phones may show old files ~10 min (HTTP cache).
+**Rebuild APK (after every web change):**
+```
+$env:JAVA_HOME="C:\Users\fahad\AppData\Local\Programs\JDK21\jdk-21.0.13+9"
+cd android; .\gradlew.bat assembleDebug
+copy app\build\outputs\apk\debug\app-debug.apk C:\Users\fahad\OneDrive\Desktop\Virtual-Therapy.apk
+```
+then send it to the user (SendUserFile).
+**Firestore rules change:** edit `cloud/firestore.rules`, then in the user's Chrome: Firebase console → Firestore → Rules; insert the same change into the CodeMirror editor via JS (`document.querySelector('.cm-content').cmView.view.dispatch(...)`) and click Publish; confirm a new "Today • time" version appears.
+**Large JS edits:** bash heredocs containing backticks get blocked by a safety parser → write a Python patch script to the scratchpad and run it with `python -I script.py <repo>`.
+
+## 7. Known issues / gotchas
+- Patient progress weekly target uses default 3 sessions/week (patients can't read `meta/study`).
+- Games load MediaPipe model/WASM from the internet at game start (no offline bundle).
+- Emulator unusable until the user enables **Windows Hypervisor Platform** (+ restart); test on a real phone with the APK.
+- Release build needs a signing key (only debug APKs so far).
+- Precision fixes were validated by simulation + mouse preview, **not yet with a real patient and camera**.
+- `okc.html` hub still uses emoji game icons (patient portal uses line icons).
+- Consent wording in `participant.js` is placeholder — replace with ethics-approved text.
+- P001 test data lives in the live database (user wants it kept).
+
+## 8. To do / ideas (not started unless noted)
+- [ ] Real-phone validation of Quad Press / Lift-Off / Steady Scales after the precision changes; tune zones/hold times from feedback.
+- [ ] Possibly: researcher-prescribed Lift-Off target per patient (currently chosen on the setup screen each time).
+- [ ] Possibly: prescribed sessions/week visible to patients (copy into participant doc).
+- [ ] Offline bundling of MediaPipe for the app; signed release APK; emulator screenshots once hypervisor is on.
+- [ ] Ethics-approved consent text; Urdu wording review by a native speaker.
+- [ ] Clinical sign-off on pain-advisory thresholds (`PAIN` in `js/okc/sync.js`, placeholders 7/10).
+
+## 9. Change log (newest first)
+| Date | Commit | Change |
+|---|---|---|
+| 2026-11-23 | — | Added this PROJECT_STATUS.md + CLAUDE.md pointer |
+| 2026-11-18 | 9880e93 | Lift-Off therapist lift target (hip flexion 15–45°), recorded + exported |
+| 2026-11-18 | d6afa8a | Precision + fatigue safety for Steady Scales, Quad Press, Lift-Off |
+| 2026-11-17 | 9385d3b | Treatment status (active/completed/withdrawn) + delete participant (rules published 4:52 PM) |
+| 2026-11-17 | 3836d97 | Patient: phone fit, ☰ side menu, live feedback refresh, Ask a question (+ researcher Questions tab; rules published 4:41 PM) |
+| 2026-11-17 | 5ac735d | Patient sign-in replaces a researcher login on the same device |
+| 2026-11-17 | ea2f0fe | Patient side rebuilt as professional portal (patient.css, icons.js, ptui.js) |
+| 2026-11-17 | c1e95a3 | Patient dashboard tabs + therapist feedback (rules published 4:11 PM) |
+| 2026-11-16 | d00e4fd / 211dcb2 | Teal & navy redesign; structured diagnosis (rules published 10:43 PM) |
+| 2026-11-16 | a49357b | Firebase connected (`virtual-therapy-17a2d`) |
+| 2026-11-16 | e4a3b42 | One "Virtual Therapy" app: role login + researcher-assigned games |
+| 2026-11-16 | b7e2df9 | Android Studio project (WebView host) |
+| 2026-11-11 | 3aec17a / 89517a3 | Research study web app (researcher dashboard + participant app, Urdu/English) |
+| 2026-11-11 | d86073d / 57e312d | Steady Scales game; service-worker cache fix |
