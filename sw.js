@@ -1,6 +1,6 @@
 // sw.js — offline service worker (network-first for app files so updates always
 // load when online; cache-first only for the big static CDN model/wasm).
-const CACHE = "okc-offline-v3";
+const CACHE = "okc-offline-v4";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {

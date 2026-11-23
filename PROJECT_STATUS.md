@@ -94,7 +94,7 @@ Deleting a participant (researcher → Details & access → type ID) removes the
 **Test UI locally (no live data touched):** start preview `movelab-kneequest` (python http.server, port 8123 — `.claude/launch.json`), open `http://localhost:8123/<page>?local=1` (switch persists in localStorage; `?local=0` to undo). Researcher Settings → "Load demo data". Browser caches modules: before testing changed files run in the page `await fetch('/js/…file.js',{cache:'reload'})` then reload.
 **Check phone fit:** resize viewport to 360 and 320; `document.documentElement.scrollWidth` must equal `clientWidth` on every patient page.
 **Game logic without a camera:** `okc.html?demo=1` → `window.__okc.openGame(id,hold,reps)`, `__okc.setPointer(y,x)` (mouse preview). For precision work, a before/after simulation (synthetic landmarks + noise) was used — rebuild one under `tests/_sim/` if needed and delete it afterwards.
-**Commit & publish web:** `git add -A && git commit` (end message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`) → `git push origin main:main`. Pages deploys in ~1 min; phones may show old files ~10 min (HTTP cache).
+**Commit & publish web:** `git add -A && git commit` (end message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`) → `git push origin main:main`. Pages deploys in ~1 min. Browsers that have visited once get new files immediately (service worker revalidates); a first-ever visit may show files up to 10 min old (GitHub max-age=600) — fix with Ctrl+F5.
 **Rebuild APK (after every web change):**
 ```
 $env:JAVA_HOME="C:\Users\fahad\AppData\Local\Programs\JDK21\jdk-21.0.13+9"
@@ -127,7 +127,8 @@ then send it to the user (SendUserFile).
 ## 9. Change log (newest first)
 | Date | Commit | Change |
 |---|---|---|
-| 2026-11-23 | (this commit) | Dark glass patient UI (patient-dark.css, kneeart.js, sparkline/miniBars + dark chart theme in charts.js; new Home + Weekly report; bottom pill bar; Urdu strings) |
+| 2026-11-23 | (next) | Service worker now registered on therapy/participant/researcher pages too (always revalidate files; cache v4) — fixes "UI not updated" after deploys |
+| 2026-11-23 | a84bdf9 | Dark glass patient UI (patient-dark.css, kneeart.js, sparkline/miniBars + dark chart theme in charts.js; new Home + Weekly report; bottom pill bar; Urdu strings) |
 | 2026-11-23 | b0cc180 | Backed up the older Desktop summary as `docs/MoveLab_Project_Summary_2026-11-16.md`; verified all files are on GitHub |
 | 2026-11-23 | 01e29a2 | Added this PROJECT_STATUS.md + CLAUDE.md pointer |
 | 2026-11-18 | 9880e93 | Lift-Off therapist lift target (hip flexion 15–45°), recorded + exported |

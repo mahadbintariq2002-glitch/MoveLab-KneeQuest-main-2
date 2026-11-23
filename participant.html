@@ -19,6 +19,15 @@
 </div>
 <div class="backdrop" id="backdrop"></div>
 <nav class="pt-tabs" id="pnav"></nav>
+<script>
+// Always load the newest files: the service worker revalidates every app file with the server (GitHub Pages otherwise
+// lets browsers reuse files for 10 min). Skipped inside the Android app, which ships its own files.
+if("serviceWorker" in navigator && !window.AndroidBridge){
+  const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if(hadController && !reloaded){ reloaded = true; location.reload(); } });
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
 <script type="module" src="js/study/participant.js"></script>
 </body>
 </html>
