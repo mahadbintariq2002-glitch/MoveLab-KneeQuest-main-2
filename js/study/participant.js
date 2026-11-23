@@ -11,7 +11,9 @@
 import { getStore } from "./store.js";
 import { T, setLang, getLang, initLang } from "../okc/i18n.js";
 import { normalizeCode, GAMES, isDone, sessionTime, mondayOf, DEFAULTS, weeklyCounts, avg, DX_TYPES, DX_SIDES, bmiClass, latestDx } from "./schema.js";
-import { ring, lineChart, barChart, COLORS } from "./charts.js";
+import { ring, lineChart, barChart, COLORS, setChartTheme, sparkline, miniBars } from "./charts.js";
+import { kneeArt } from "./kneeart.js";
+setChartTheme("dark");
 import { icon } from "./icons.js";
 import { esc, langSeg, brandPane } from "./ptui.js";
 
@@ -136,50 +138,72 @@ function viewApp(cur){
     <div class="side-foot"><div class="who"><span class="avatar">${initial}</span><div>${esc(d.name || T("Patient"))}<small>${esc(T("Study ID"))} ${esc(cur.studyId)}</small></div></div>
       ${langSeg()}<div class="row" style="gap:16px"><a href="therapy.html?choose=1">${icon("swap", 15)}${esc(T("Change role"))}</a><a href="?signout=1">${icon("logout", 15)}${esc(T("Sign out"))}</a></div></div>`;
   $("#ptTop").innerHTML = `<button class="hamb" id="hamb" aria-label="Menu">${icon("menu", 20)}</button><span class="brandmark">${icon("mark", 20)}</span><b>${esc(T("Virtual Therapy"))}</b><div class="right">${langSeg()}<a href="#health" class="avatar" style="width:32px;height:32px;border-radius:10px;text-decoration:none">${initial}</a></div>`;
-  $("#pnav").innerHTML = "";
+  const dockItems = [["home", "home", "Overview"], ["progress", "progress", "Progress"], ["health", "health", "My health"], ["messages", "message", "Messages"], ["questions", "help", "Ask a question"]];
+  $("#pnav").className = "dock"; $("#pnav").setAttribute("aria-label", T("Main menu"));
+  $("#pnav").innerHTML = dockItems.map(([k, ic, l]) => `<a href="#${k}" class="${tab === k ? "on" : ""}" aria-label="${esc(T(l))}" title="${esc(T(l))}">${icon(ic, 21)}${cnt(k)}</a>`).join("");
   $("#hamb").onclick = () => document.body.classList.toggle("nav-open");
   document.querySelectorAll("#side a").forEach(a => a.addEventListener("click", () => document.body.classList.remove("nav-open")));
   redraw = null; if(tab !== lastTab){ window.scrollTo(0, 0); lastTab = tab; }
   ({ home: pageHome, progress: pageProgress, health: pageHealth, messages: pageMessages, questions: pageQuestions })[tab](cur, d);
 }
 
-// ── overview ─────────────────────────────────────────────────────────────────────────────────
+// ── overview (dark dashboard) ─────────────────────────────────────────────────────────────────
+// Knee Health Score: an app-computed index (not a clinical measure) from the last 10 sessions —
+// 45 % movement quality, 30 % sessions in the last 7 days vs the weekly target, 25 % pain after exercise (lower = better).
+function kneeScore(d){
+  const recent = d.done.slice(0, 10); if(!recent.length) return null;
+  const target = DEFAULTS.prescribedPerWeek || 3, last7 = d.done.filter(s => Date.now() - sessionTime(s) < 7 * DAY).length;
+  const q = avg(recent.map(s => s.qualityPct)), pain = avg(recent.map(s => s.painAfter != null ? s.painAfter : s.painBefore));
+  return Math.max(0, Math.min(100, Math.round(0.45 * (q == null ? 60 : q) + 0.30 * Math.min(1, last7 / target) * 100 + 0.25 * (pain == null ? 70 : 100 - pain * 10))));
+}
+const scoreStatus = v => v == null ? { t: "No data yet", c: "muted" } : v >= 80 ? { t: "Good", c: "good" } : v >= 60 ? { t: "Fair", c: "fair" } : { t: "Needs attention", c: "low" };
+const painStatus = v => v == null ? { t: "No rating yet", c: "muted" } : v <= 3 ? { t: "Low", c: "good" } : v <= 6 ? { t: "Moderate", c: "fair" } : { t: "High", c: "low" };
+const TIPS = ["Warm up with a few gentle knee bends before you start.", "Move slowly and smoothly — control matters more than speed.",
+  "A short walk on a flat surface keeps the knee joint nourished.", "Keep a sturdy chair nearby for every standing exercise.",
+  "Stop if pain goes above 5 out of 10 and tell your therapist.", "Little and often: three short sessions a week work better than one long one.",
+  "Sit with your knee straight sometimes — long bent sitting makes it stiff."];
+const tipOfDay = () => TIPS[Math.floor(Date.now() / DAY) % TIPS.length];
+
 function pageHome(cur, d){
   const target = DEFAULTS.prescribedPerWeek || 3, week = d.done.filter(s => sessionTime(s) >= mondayOf(Date.now())).length, left = Math.max(0, target - week);
   const lastOf = id => d.done.find(s => s.game === id), best = id => Math.max(0, ...d.done.filter(s => s.game === id).map(s => s.stars || 0));
   const next = d.games.slice().sort((a, b) => ((lastOf(a.id) && sessionTime(lastOf(a.id))) || 0) - ((lastOf(b.id) && sessionTime(lastOf(b.id))) || 0))[0];
-  const q5 = avg(d.done.slice(0, 5).map(s => s.qualityPct)), hr = new Date().getHours();
-  const hello = getLang() === "ur" ? T("Hello") : hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
-  const latest = d.fb[0], fbBy = {}; d.fb.forEach(f => { if(f.sessionId) (fbBy[f.sessionId] ||= []).push(f); });
+  const chron = d.done.slice().reverse(), score = kneeScore(d), st = scoreStatus(score);
+  const pains = chron.map(s => s.painAfter != null ? s.painAfter : s.painBefore).filter(v => v != null), painNow = pains.length ? pains[pains.length - 1] : null, ps = painStatus(painNow);
+  const flex = chron.map(s => s.peakFlexionDeg).filter(v => v != null), flexNow = flex.length ? flex[flex.length - 1] : null;
+  const qual = chron.map(s => s.qualityPct).filter(v => v != null), qNow = qual.length ? Math.round(avg(qual.slice(-5))) : null;
+  const weekly = weeklyCounts(chron, 6).map(w => w.n);
+  const latest = d.fb[0], first = d.name ? d.name.split(" ")[0] : "";
+  const tile = (lbl, val, unit, status, spark) => `<div class="dtile"><span class="lbl">${esc(T(lbl))}</span><b class="v">${val}${unit ? `<small>${unit}</small>` : ""}</b><span class="st ${status.c}">${esc(T(status.t))}</span>${spark}</div>`;
   $("#view").innerHTML = `
-    <div class="pg-head"><div><div class="eyebrow">${esc(new Date().toLocaleDateString(loc(), { weekday:"long", day:"numeric", month:"long" }))}</div>
-      <h1>${esc(hello)}${d.name ? ", " + esc(d.name.split(" ")[0]) : ""}</h1><p>${esc(T("Here is your plan for today."))}</p></div></div>
-    ${d.p.status === "completed" ? `<div class="callout" style="margin-bottom:18px;background:#EEF6FF;border-color:#CFE0F5">${icon("check", 20)}<div><b>${esc(T("You have completed your treatment programme"))}${d.p.statusDate ? " · " + esc(d.p.statusDate) : ""}</b>${esc(T("Well done. You can keep doing your exercises and view your records here."))}</div></div>`
-      : d.p.status === "withdrawn" ? `<div class="callout warn" style="margin-bottom:18px">${icon("alert", 20)}<div><b>${esc(T("Your participation in the study has ended"))}${d.p.statusDate ? " · " + esc(d.p.statusDate) : ""}</b>${esc(T("Your records stay available here. Contact your therapist if you have any questions."))}</div></div>` : ""}
-    ${next ? `<section class="next"><div><span class="gico">${icon(next.id, 28)}</span><div class="eyebrow">${esc(T("Next exercise"))}</div><h2>${esc(T(next.name))}</h2>
-      <p>${esc(T(next.exercise))} · ${esc(T("about 5 minutes · keep your camera on"))}</p>
-      <div class="row" style="gap:10px"><a class="btn-primary" href="okc.html?game=${next.id}">${icon("play", 18)} ${esc(T("Start session"))}</a><a class="btn-quiet" href="okc.html">${esc(T("All exercises"))}</a></div></div>
-      <div class="weekring">${ring(week / target, { size:112, stroke:10, color:"#2DD4BF", track:"rgba(255,255,255,.12)", label:`${week}/${target}`, sub:esc(T("this week")) })}<small>${esc(left ? T("{n} more to reach your weekly goal", { n: left }) : T("Weekly goal reached"))}</small></div></section>` : ""}
-    <div class="kpis">
-      <div class="kpi"><div class="lbl">${icon("target", 16)}${esc(T("This week"))}</div><div class="val">${week}<small> / ${target}</small></div><div class="meter"><i style="width:${Math.min(100, week / target * 100)}%"></i></div></div>
-      <div class="kpi"><div class="lbl">${icon("flame", 16)}${esc(T("Day streak"))}</div><div class="val">${streakOf(d.done)}</div><div class="sub">${esc(T("days in a row"))}</div></div>
-      <div class="kpi"><div class="lbl">${icon("check", 16)}${esc(T("Completed"))}</div><div class="val">${d.done.length}</div><div class="sub">${esc(T("sessions in total"))}</div></div>
-      <div class="kpi"><div class="lbl">${icon("activity", 16)}${esc(T("Average quality"))}</div><div class="val">${q5 == null ? "—" : Math.round(q5) + "%"}</div><div class="sub">${esc(T("last 5 sessions"))}</div></div></div>
-    <div class="cols"><div>
-      ${panel("clipboard", "Your exercise plan", `<div class="rows">${d.games.map(g => { const l = lastOf(g.id);
-        return `<a class="rowi" href="okc.html?game=${g.id}">${gtile(g.id)}<div class="main"><b>${esc(T(g.name))}</b><span>${esc(T(g.exercise))}</span></div>
-          <div class="end"><span class="hide-sm">${l ? esc(T("Last played {d}", { d: relDay(sessionTime(l)) })) : esc(T("Not played yet"))}</span>${stars(best(g.id))}<span class="startbtn">${icon("play", 16)}</span></div></a>`; }).join("")}</div>`,
-        `<span class="meta">${esc(T("{n} of {m} games assigned by your therapist", { n: d.games.length, m: GAMES.length }))}</span>`, true)}
-      ${panel("activity", "Recent activity", d.done.length ? `<div class="rows">${d.done.slice(0, 5).map(s => { const g = gameOf(s.game), f = fbBy[s.id];
-        return `<div class="rowi">${gtile(s.game)}<div class="main"><b>${esc(T(g.name))}</b><span>${esc(relDay(sessionTime(s)))}${s.painBefore != null ? ` · ${esc(T("Pain"))} ${s.painBefore} → ${s.painAfter ?? "—"}` : ""}${f ? ` · ${esc(T("Therapist replied"))}` : ""}</span></div>
-          <div class="end">${f ? `<a href="#messages" class="linkbtn">${icon("message", 16)}</a>` : ""}${qchip(s.qualityPct)}${stars(s.stars)}</div></div>`; }).join("")}</div>`
-        : empty("activity", "No sessions yet", "Your completed exercises will appear here."), `<a class="linkbtn" href="#progress">${esc(T("View progress"))} ${icon("chevron", 14)}</a>`, true)}
-    </div><div>
-      ${panel("message", "From your therapist", latest ? `<div class="note ${latest.kind || ""} ${d.unread ? "unread" : ""}"><span class="who">${icon("doctor", 18)}</span><div class="grow">
-          <div class="hd"><b>${esc(T("Your therapist"))}</b><span class="tag ${latest.kind || ""}">${esc(T((FB[latest.kind] || FB.note).t))}</span><span>${esc(relDay(latest.createdAt))}</span></div><p>${esc(latest.text)}</p></div></div>`
-        : empty("inbox", "No messages yet", "Feedback from your therapist will appear here."), d.fb.length ? `<a class="linkbtn" href="#messages">${esc(T("All messages"))} ${icon("chevron", 14)}</a>` : "")}
-      ${panel("shield", "Exercise safely", `<div class="callout">${icon("chair", 20)}<div>${esc(T("Keep a sturdy chair nearby. Stop if you feel sharp pain or dizziness, and tell your therapist."))}</div></div>`)}
-    </div></div>`;
+    <header class="dhead"><div><p class="hi">${esc(T("Hi"))}${first ? ", " + esc(first) : ""}!</p><h1>${esc(T("Let's keep your"))} <span>${esc(T("knees healthy"))}</span></h1></div>
+      <div class="dact"><a class="ibtn" href="#health" aria-label="${esc(T("My health"))}">${icon("user", 20)}</a><a class="ibtn" href="#messages" aria-label="${esc(T("Messages"))}">${icon("message", 20)}${d.unread ? `<i class="pip"></i>` : ""}</a></div></header>
+    ${d.p.status === "completed" ? `<div class="gcard note-ok">${icon("check", 20)}<div><b>${esc(T("You have completed your treatment programme"))}</b><span>${esc(T("Well done. You can keep doing your exercises and view your records here."))}</span></div></div>`
+      : d.p.status === "withdrawn" ? `<div class="gcard note-warn">${icon("alert", 20)}<div><b>${esc(T("Your participation in the study has ended"))}</b><span>${esc(T("Your records stay available here. Contact your therapist if you have any questions."))}</span></div></div>` : ""}
+    <div class="dgrid">
+      <section class="hero-knee">${kneeArt({ height: 250 })}</section>
+      <div class="dcol">
+        <a class="gcard metric" href="#progress"><div><span class="lbl">${esc(T("Knee Health Score"))}</span><b class="big">${score == null ? "—" : score}<small>${score == null ? "" : "%"}</small></b><span class="st ${st.c}">${esc(T(st.t))}</span></div>
+          <span class="gico">${kneeArt({ height: 46, small: true })}</span></a>
+        <div class="gcard metric"><div><span class="lbl">${esc(T("Pain level (0–10)"))}</span><b class="big">${painNow == null ? "—" : painNow}</b><span class="st ${ps.c}">${esc(T(ps.t))}</span></div>
+          <div class="bars">${miniBars(pains, { color: ps.c === "low" ? "#FB7185" : ps.c === "fair" ? "#FBBF24" : "#4ADE80" })}<span class="gico sm">${icon("health", 18)}</span></div></div>
+      </div>
+    </div>
+    <h2 class="dsec">${esc(T("Today's overview"))}</h2>
+    <div class="dtiles">
+      ${tile("Knee bend", flexNow == null ? "—" : Math.round(flexNow), flexNow == null ? "" : "°", flexNow == null ? { t: "Not measured", c: "muted" } : { t: flexNow >= 110 ? "Good" : flexNow >= 90 ? "Fair" : "Limited", c: flexNow >= 110 ? "good" : flexNow >= 90 ? "fair" : "low" }, sparkline(flex.slice(-8)))}
+      ${tile("This week", week, `/${target}`, left ? { t: T("{n} to go", { n: left }), c: "fair" } : { t: "Goal reached", c: "good" }, sparkline(weekly))}
+      ${tile("Quality", qNow == null ? "—" : qNow, qNow == null ? "" : "%", qNow == null ? { t: "No data yet", c: "muted" } : { t: qNow >= 80 ? "Good" : qNow >= 60 ? "Fair" : "Keep practising", c: qNow >= 80 ? "good" : qNow >= 60 ? "fair" : "low" }, sparkline(qual.slice(-8)))}
+    </div>
+    ${next ? `<section class="gcard nextx"><span class="gico">${icon(next.id, 24)}</span><div class="grow"><span class="lbl">${esc(T("Next exercise"))}</span><b>${esc(T(next.name))}</b><span class="sub">${esc(T(next.exercise))}</span></div>
+      <a class="btn-go" href="okc.html?game=${next.id}">${icon("play", 16)} ${esc(T("Start"))}</a></section>` : ""}
+    ${latest ? `<a class="gcard msgc ${d.unread ? "new" : ""}" href="#messages"><span class="gico">${icon("doctor", 20)}</span><div class="grow"><span class="lbl">${esc(T(d.unread ? "New message from your therapist" : "Latest message from your therapist"))} · ${esc(relDay(latest.createdAt))}</span>
+      <p>${esc(latest.text.length > 120 ? latest.text.slice(0, 118) + "…" : latest.text)}</p></div>${icon("chevron", 18, "chev")}</a>` : ""}
+    <h2 class="dsec">${esc(T("Your exercise plan"))} <span>${esc(T("{n} of {m} games assigned by your therapist", { n: d.games.length, m: GAMES.length }))}</span></h2>
+    <div class="gcard list">${d.games.map(g => { const l = lastOf(g.id);
+      return `<a class="drow" href="okc.html?game=${g.id}"><span class="gico">${icon(g.id, 20)}</span><div class="grow"><b>${esc(T(g.name))}</b><span>${l ? esc(T("Last played {d}", { d: relDay(sessionTime(l)) })) : esc(T("Not played yet"))}</span></div>${stars(best(g.id))}<span class="playb">${icon("play", 14)}</span></a>`; }).join("")}</div>
+    <section class="gcard tipc"><div class="grow"><span class="lbl accent">${esc(T("Tip of the day"))}</span><p>${esc(T(tipOfDay()))}</p></div><span class="tipart">${icon("chair", 34)}</span></section>
+    <p class="dnote">${esc(T("The Knee Health Score is calculated by the app from your exercise quality, weekly sessions and pain ratings. It is not a medical test."))}</p>`;
 }
 
 // ── progress ─────────────────────────────────────────────────────────────────────────────────
@@ -194,26 +218,31 @@ const MEASURES = [
 const num = v => (v == null || v === "" || Number.isNaN(Number(v))) ? null : Number(v);
 function pageProgress(cur, d){
   const done = d.done.slice().reverse(), as = ((d.prof.assessments) || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const weekly = weeklyCounts(done, 8), q5 = avg(d.done.slice(0, 5).map(s => s.qualityPct)), pb = avg(d.done.slice(0, 10).map(s => s.painBefore)), pa = avg(d.done.slice(0, 10).map(s => s.painAfter));
-  const month = d.done.filter(s => Date.now() - sessionTime(s) < 30 * DAY).length, r1 = v => v == null ? "—" : Math.round(v * 10) / 10;
+  const weekly = weeklyCounts(done, 8), r1 = v => v == null ? "—" : Math.round(v * 10) / 10, score = kneeScore(d), st = scoreStatus(score);
+  const mon = mondayOf(Date.now()), sun = mon + 6 * DAY, fmt = t => new Date(t).toLocaleDateString(loc(), { day: "numeric", month: "short" });
+  const q = done.map(s => s.qualityPct).filter(v => v != null), qBest = q.length ? Math.max(...q) : null, qAvg = q.length ? Math.round(avg(q)) : null;
+  const highPain = d.done.filter(s => Date.now() - sessionTime(s) < 7 * DAY && ((s.painAfter != null && s.painAfter >= 7) || (s.painBefore != null && s.painBefore >= 7))).length;
   const rows = MEASURES.map(m => { const vals = as.map(a => num(m.get(a))).filter(v => v != null); if(!vals.length) return "";
     const b = vals[0], l = vals[vals.length - 1], dlt = vals.length > 1 ? Math.round((l - b) * 10) / 10 : null, good = dlt == null || dlt === 0 ? "" : ((m.better === "lower") === (dlt < 0) ? "up" : "down");
     return `<tr><td class="lbl">${esc(T(m.label))}</td><td class="n base">${r1(b)}</td><td class="n">${r1(l)}</td><td class="n">${dlt == null ? `<span class="delta">${esc(T("first"))}</span>` : `<span class="delta ${good}">${dlt > 0 ? "+" : ""}${dlt} · ${esc(T(good === "up" ? "improved" : good === "down" ? "worse" : "same"))}</span>`}</td></tr>`; }).join("");
-  $("#view").innerHTML = `<div class="pg-head"><div><div class="eyebrow">${esc(T("Progress"))}</div><h1>${esc(T("My progress"))}</h1><p>${esc(T("Your exercise sessions and your therapist's measurements."))}</p></div></div>
-    <div class="kpis"><div class="kpi"><div class="lbl">${icon("activity", 16)}${esc(T("Average quality"))}</div><div class="val">${q5 == null ? "—" : Math.round(q5) + "%"}</div><div class="sub">${esc(T("last 5 sessions"))}</div></div>
-      <div class="kpi"><div class="lbl">${icon("health", 16)}${esc(T("Pain before → after"))}</div><div class="val">${r1(pb)} → ${r1(pa)}</div><div class="sub">${esc(T("0 = no pain, 10 = worst"))}</div></div>
-      <div class="kpi"><div class="lbl">${icon("calendar", 16)}${esc(T("Last 30 days"))}</div><div class="val">${month}</div><div class="sub">${esc(T("sessions completed"))}</div></div>
-      <div class="kpi"><div class="lbl">${icon("check", 16)}${esc(T("Completed"))}</div><div class="val">${d.done.length}</div><div class="sub">${esc(T("sessions in total"))}</div></div></div>
-    <div class="cols-2">${panel("calendar", "Sessions per week", `<canvas id="pc0"></canvas>`)}${panel("activity", "Session quality (%)", `<canvas id="pc1"></canvas>`)}</div>
-    ${panel("health", "Pain before and after exercise (0–10)", `<canvas id="pc2"></canvas>`)}
-    ${panel("clipboard", "Clinical measurements", as.length ? `<table class="mtable"><thead><tr><th>${esc(T("Measure"))}</th><th style="text-align:end" class="base">${esc(T("Start"))}</th><th style="text-align:end">${esc(T("Latest"))}</th><th style="text-align:end">${esc(T("Change"))}</th></tr></thead><tbody>${rows}</tbody></table>`
-      : empty("clipboard", "No check-ups yet", "Your therapist has not recorded any check-up results yet."), as.length ? `<span class="meta">${esc(T("Last check: {d}", { d: as[as.length - 1].timepoint + " · " + as[as.length - 1].date }))}</span>` : "", !!as.length)}
-    ${as.length ? panel("calendar", "All check-ups", `<div class="rows">${as.slice().reverse().map(a => `<div class="rowi"><span class="gtile t2">${icon("clipboard", 20)}</span><div class="main"><b>${esc(a.timepoint)}</b><span>${esc(a.date)}${a.notes ? " · " + esc(a.notes) : ""}</span></div>
-      <div class="end">${a.womac && a.womac.total != null ? `<span class="qchip">WOMAC ${a.womac.total}</span>` : ""}${a.vas != null ? `<span class="qchip">VAS ${a.vas}</span>` : ""}</div></div>`).join("")}</div>`, "", true) : ""}`;
+  $("#view").innerHTML = `<header class="dhead"><div><p class="hi">${esc(T("Progress"))}</p><h1>${esc(T("Weekly report"))}</h1></div><span class="rangechip">${icon("calendar", 15)} ${esc(fmt(mon))} – ${esc(fmt(sun))}</span></header>
+    <section class="gcard metric wide"><div><span class="lbl">${esc(T("Knee function"))}</span><b class="big">${score == null ? "—" : score}<small>${score == null ? "" : "%"}</small></b><span class="st ${st.c}">${esc(T(st.t))}</span></div>
+      <span class="artsm">${kneeArt({ height: 110, small: true })}</span></section>
+    <section class="gcard chartc"><div class="chd"><span class="lbl">${esc(T("Session quality (%)"))}</span><div class="pair"><div><b>${qBest == null ? "—" : qBest + "%"}</b><span>${esc(T("Best"))}</span></div><div><b>${qAvg == null ? "—" : qAvg + "%"}</b><span>${esc(T("Average"))}</span></div></div></div><canvas id="pc1"></canvas></section>
+    <div class="dpair">
+      <section class="gcard chartc"><div class="chd"><span class="lbl">${esc(T("Sessions per week"))}</span></div><canvas id="pc0"></canvas></section>
+      <section class="gcard chartc"><div class="chd"><span class="lbl">${esc(T("Pain before and after exercise (0–10)"))}</span></div><canvas id="pc2"></canvas></section>
+    </div>
+    <section class="gcard metric"><div><span class="lbl">${esc(T("Symptoms this week"))}</span><b class="mid">${highPain ? esc(T("{n} high-pain session(s)", { n: highPain })) : esc(T("None"))}</b><span class="st ${highPain ? "low" : "good"}">${esc(T(highPain ? "Tell your therapist" : "Great!"))}</span></div>
+      <span class="okdot ${highPain ? "warn" : ""}">${icon(highPain ? "alert" : "check", 22)}</span></section>
+    <h2 class="dsec">${esc(T("Clinical measurements"))} <span>${as.length ? esc(T("Last check: {d}", { d: as[as.length - 1].timepoint + " · " + as[as.length - 1].date })) : ""}</span></h2>
+    <section class="gcard list">${as.length ? `<table class="mtable"><thead><tr><th>${esc(T("Measure"))}</th><th style="text-align:end" class="base">${esc(T("Start"))}</th><th style="text-align:end">${esc(T("Latest"))}</th><th style="text-align:end">${esc(T("Change"))}</th></tr></thead><tbody>${rows}</tbody></table>`
+      : empty("clipboard", "No check-ups yet", "Your therapist has not recorded any check-up results yet.")}</section>
+    <section class="gcard tipc"><div class="grow"><span class="lbl accent">${esc(T("Tip of the day"))}</span><p>${esc(T(tipOfDay()))}</p></div><span class="tipart">${icon("activity", 34)}</span></section>`;
   const lab = done.map(s => new Date(sessionTime(s)).toLocaleDateString(undefined, { day: "numeric", month: "short" }));
-  redraw = () => { barChart($("#pc0"), { labels: weekly.map(w => w.label), values: weekly.map(w => w.n), ref: DEFAULTS.prescribedPerWeek, height: 190 });
-    lineChart($("#pc1"), { labels: lab, series: [{ label: "Quality", data: done.map(s => s.qualityPct) }], min: 0, max: 100, height: 190 });
-    lineChart($("#pc2"), { labels: lab, series: [{ label: T("Before"), color: COLORS[1], data: done.map(s => s.painBefore) }, { label: T("After"), color: COLORS[0], data: done.map(s => s.painAfter) }], min: 0, max: 10, height: 200 }); };
+  redraw = () => { barChart($("#pc0"), { labels: weekly.map(w => w.label), values: weekly.map(w => w.n), ref: DEFAULTS.prescribedPerWeek, height: 170, color: "#4ADE80" });
+    lineChart($("#pc1"), { labels: lab, series: [{ label: "Quality", color: "#4ADE80", data: done.map(s => s.qualityPct) }], min: 0, max: 100, height: 170 });
+    lineChart($("#pc2"), { labels: lab, series: [{ label: T("Before"), color: "#FB7185", data: done.map(s => s.painBefore) }, { label: T("After"), color: "#4ADE80", data: done.map(s => s.painAfter) }], min: 0, max: 10, height: 180 }); };
   redraw();
 }
 

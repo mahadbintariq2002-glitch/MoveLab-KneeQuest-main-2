@@ -1,7 +1,7 @@
 # Virtual Therapy (MoveLab / KneeQuest) — Project Status
 
 > **Single source of truth.** Read this file first in every session instead of the chat history.
-> **Update it after every change** (sections 7, 8 and 9 at minimum). Last updated: **2026-11-23**.
+> **Update it after every change** (sections 7, 8 and 9 at minimum). Last updated: **2026-11-23** (dark glass patient UI).
 
 ---
 
@@ -54,7 +54,8 @@ Web app = vanilla ES modules, no build step. Android = WebView shell that bundle
 | `js/study/schema.js` | Constants (GAMES, DX types, ICD-10 helper, STATUSES), scoring (WOMAC, BBS), validation, CSV builders. |
 | `js/study/charts.js` | Canvas line/bar charts + SVG `ring()`. |
 | `js/study/icons.js`, `ptui.js` | Line-icon set; shared brand panel + language switch for patient/entry screens. |
-| `css/study.css` | Design tokens (navy/teal) + researcher console styles. `css/patient.css` = patient portal + auth screens. |
+| `js/study/kneeart.js` | SVG anatomical knee illustration (hero + small card icon) for the dark patient dashboard. |
+| `css/study.css` | Design tokens (navy/teal) + researcher console styles. `css/patient.css` = patient portal + auth layout; `css/patient-dark.css` = **dark glass theme** (body class `pt dark`, used by participant.html + therapy.html). Researcher console stays light. |
 | `js/study/cloud-config.js` | Firebase web config (not secret; rules protect data). `null` = local mode. |
 | `cloud/firestore.rules` | Security rules — **keep in sync with the live console** (see §6). `cloud/SETUP.md` setup guide. |
 | `android/` | Gradle project (AGP 8.13.2, Gradle 8.14.3 wrapper, Java, compile/target SDK 35, minSdk 26). App id `pk.movelab.virtualtherapy`, name "Virtual Therapy", start page `therapy.html`. `syncWeb` task copies web files into assets at build time. |
@@ -85,7 +86,7 @@ Deleting a participant (researcher → Details & access → type ID) removes the
 
 **Researcher console** — Overview (KPIs, activity chart, quality/pain/adherence rings, recent activity, unanswered questions, needs attention, games played, diagnosis mix, KL mix); participants list (status filter, adherence bars, diagnosis); add participant (identity, demographics, games); profile tabs: Outcomes (table + charts), Game progress (charts, by game, recent sessions + feedback panel / Reply), Diagnosis (structured + history), Questions (reply), Details & access (demographics, identity reveal, access code share/reset, assigned games, **treatment status**, **delete participant**); assessment form (WOMAC, TUG stopwatch, BBS, VAS, ROM); exports (demographics incl. status, assessments, sessions incl. lift target, diagnoses, identity key); settings; local demo data.
 
-**Patient portal** — professional navy/teal design (line icons, no emoji UI); Overview (next exercise card + weekly ring, KPIs, exercise plan, therapist note, recent activity, safety); Progress (charts + clinical measurements vs first check-up); My health (personal details incl. CNIC, diagnosis, plan); Messages (feedback linked to sessions, unread badge); Ask a question (topic + text, replies shown); completed/withdrawn banner; auto-refresh on app resume, every 60 s, on page change. Fits 320–360 px phones.
+**Patient portal** — **dark glass theme** (2026-11-23, modelled on the user's lung-app reference): near-black + green accent, frosted cards, bottom pill bar on phones (+ ☰ drawer). Overview = "Hi, Name! Let's keep your knees healthy", glowing knee illustration, **Knee Health Score** (app index: 45 % quality last 10 sessions + 30 % sessions last 7 days vs target + 25 % pain-after; labelled "not a medical test"), Pain level card with mini bars, Today's overview tiles (knee bend °, this week, quality — each with sparkline), next exercise, therapist message, exercise plan, tip of the day. Progress = "Weekly report" (date-range chip, knee function score, quality chart with best/average, sessions/week, pain chart, symptoms card = high-pain sessions this week, clinical measurements). Earlier: Progress (charts + clinical measurements vs first check-up); My health (personal details incl. CNIC, diagnosis, plan); Messages (feedback linked to sessions, unread badge); Ask a question (topic + text, replies shown); completed/withdrawn banner; auto-refresh on app resume, every 60 s, on page change. Fits 320–360 px phones.
 
 **Platform** — Firebase live (rules published), patient login replaces a researcher login on the same device, Android single app with WebView bridge, service worker skipped inside the app.
 
@@ -110,7 +111,8 @@ then send it to the user (SendUserFile).
 - Emulator unusable until the user enables **Windows Hypervisor Platform** (+ restart); test on a real phone with the APK.
 - Release build needs a signing key (only debug APKs so far).
 - Precision fixes were validated by simulation + mouse preview, **not yet with a real patient and camera**.
-- `okc.html` hub still uses emoji game icons (patient portal uses line icons).
+- `okc.html` hub still uses emoji game icons and its own dark purple/teal look (patient portal uses line icons + dark green glass).
+- Knee Health Score is an app-made index (weights in `kneeScore()` in participant.js) — not validated clinically; adjust weights with the supervisor if needed.
 - Consent wording in `participant.js` is placeholder — replace with ethics-approved text.
 - P001 test data lives in the live database (user wants it kept).
 
@@ -125,7 +127,8 @@ then send it to the user (SendUserFile).
 ## 9. Change log (newest first)
 | Date | Commit | Change |
 |---|---|---|
-| 2026-11-23 | — | Backed up the older Desktop summary as `docs/MoveLab_Project_Summary_2026-11-16.md`; verified all files are on GitHub |
+| 2026-11-23 | (this commit) | Dark glass patient UI (patient-dark.css, kneeart.js, sparkline/miniBars + dark chart theme in charts.js; new Home + Weekly report; bottom pill bar; Urdu strings) |
+| 2026-11-23 | b0cc180 | Backed up the older Desktop summary as `docs/MoveLab_Project_Summary_2026-11-16.md`; verified all files are on GitHub |
 | 2026-11-23 | 01e29a2 | Added this PROJECT_STATUS.md + CLAUDE.md pointer |
 | 2026-11-18 | 9880e93 | Lift-Off therapist lift target (hip flexion 15–45°), recorded + exported |
 | 2026-11-18 | d6afa8a | Precision + fatigue safety for Steady Scales, Quad Press, Lift-Off |
